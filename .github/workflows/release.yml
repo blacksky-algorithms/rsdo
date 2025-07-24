@@ -51,8 +51,11 @@ jobs:
       - name: Generate version and tag
         id: version
         run: |
-          # Generate date-based version (YYYY.MM.DD)
-          DATE_VERSION=$(date +'%Y.%m.%d')
+          # Generate date-based version (YYYY.M.D) - no leading zeros
+          YEAR=$(date +'%Y')
+          MONTH=$(date +'%-m')  # %-m removes leading zero
+          DAY=$(date +'%-d')    # %-d removes leading zero
+          DATE_VERSION="${YEAR}.${MONTH}.${DAY}"
           TAG_NAME="v${DATE_VERSION}"
           
           echo "VERSION=${DATE_VERSION}" >> $GITHUB_OUTPUT
@@ -162,16 +165,23 @@ jobs:
           
           # Delete existing tag if it exists (for force mode)
           if git tag -l | grep -q "^${TAG_NAME}$"; then
+            echo "Deleting existing tag ${TAG_NAME}"
             git tag -d "${TAG_NAME}"
-            git push origin ":refs/tags/${TAG_NAME}" || true
+            # Delete remote tag, ignore if it doesn't exist
+            git push origin ":refs/tags/${TAG_NAME}" 2>/dev/null || echo "Remote tag ${TAG_NAME} doesn't exist or already deleted"
           fi
           
           # Create new tag
           git tag -a "${TAG_NAME}" -m "${TAG_MSG}"
           
-          # Push changes and tag
+          # Push changes and tag with error handling
+          echo "Pushing commit to main branch..."
           git push origin main
+          
+          echo "Pushing tag ${TAG_NAME}..."
           git push origin "${TAG_NAME}"
+          
+          echo "✅ Successfully pushed commit and tag"
 
       - name: Generate changelog
         if: steps.check.outputs.should_release == 'true'
@@ -312,10 +322,24 @@ jobs:
       - name: Build binary
         run: cargo build --locked --release --target ${{ matrix.target }}
 
+      - name: Prepare binary for upload
+        run: |
+          # Verify binary exists and is executable
+          BINARY_PATH="target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+          if [ ! -f "$BINARY_PATH" ]; then
+            echo "❌ Binary not found at $BINARY_PATH"
+            exit 1
+          fi
+          
+          # Get binary size for logging
+          BINARY_SIZE=$(stat -c%s "$BINARY_PATH" 2>/dev/null || stat -f%z "$BINARY_PATH" 2>/dev/null || echo "unknown")
+          echo "📦 Binary ready: $BINARY_PATH (${BINARY_SIZE} bytes)"
+
       - name: Upload binary to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-and-release.outputs.tag_name }}
           files: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

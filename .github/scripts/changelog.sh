@@ -32,7 +32,7 @@ esac
 
 # Function to generate auto changelog
 generate_auto_changelog() {
-  local current_date=$(date +'%Y-%m-%d %H:%M:%S UTC')
+  local current_date=$(date +'%Y-%-m-%-d %H:%M:%S UTC')  # Remove leading zeros
   local short_commit=$(git rev-parse --short HEAD)
   local previous_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo 'main')
   
@@ -42,7 +42,7 @@ generate_auto_changelog() {
 This is an automated ${RELEASE_TYPE,,} based on the date ${TAG_VERSION}.
 
 ### What's Changed
-- Latest changes from the main branch as of $(date +'%Y-%m-%d')
+- Latest changes from the main branch as of $(date +'%Y-%-m-%-d')
 - Generated automatically from commit ${short_commit}
 
 ### Release Details
@@ -90,7 +90,7 @@ extract_existing_changelog() {
 # Function to enhance existing changelog with release details
 enhance_changelog() {
   local existing_changelog="$1"
-  local current_date=$(date +'%Y-%m-%d %H:%M:%S UTC')
+  local current_date=$(date +'%Y-%-m-%-d %H:%M:%S UTC')  # Remove leading zeros
   local short_commit=$(git rev-parse --short HEAD)
   
   cat << EOF

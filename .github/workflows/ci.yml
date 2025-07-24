@@ -45,7 +45,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-clippy-cargo-${{ hashFiles('Cargo.lock') }}
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
@@ -133,3 +133,27 @@ jobs:
         run: cargo doc --locked --no-deps --all-features
         env:
           RUSTDOCFLAGS: -D warnings
+      
+      - name: Check for broken links in docs
+        run: |
+          # Install cargo-deadlinks if not cached
+          if ! command -v cargo-deadlinks &> /dev/null; then
+            cargo install cargo-deadlinks
+          fi
+          cargo deadlinks --check-http
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run security audit
+        run: cargo audit

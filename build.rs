@@ -163,6 +163,9 @@ impl RefResolver {
         // Clean up any remaining unresolved references
         self.clean_unresolved_refs(&mut value)?;
         
+        // Deduplicate response types to prevent progenitor 0.11.0 assertion failures
+        self.deduplicate_response_types(&mut value)?;
+        
         Ok(value)
     }
     
@@ -620,6 +623,131 @@ properties:
             }
             _ => {}
         }
+        Ok(())
+    }
+    
+    fn deduplicate_response_types(&self, value: &mut Value) -> Result<(), Box<dyn std::error::Error>> {
+        println!("Deduplicating response types to prevent progenitor assertion failures...");
+        let mut operations_modified = 0;
+        let mut total_responses_removed = 0;
+        
+        if let Some(obj) = value.as_mapping_mut() {
+            if let Some(paths) = obj.get_mut(&Value::String("paths".to_string())) {
+                if let Some(paths_map) = paths.as_mapping_mut() {
+                    for (path_key, path_value) in paths_map.iter_mut() {
+                        if let Some(path_obj) = path_value.as_mapping_mut() {
+                            // Check each HTTP method in this path
+                            for (method_key, method_value) in path_obj.iter_mut() {
+                                if let Some(method_str) = method_key.as_str() {
+                                    // Skip non-HTTP method keys like "parameters"
+                                    if !["get", "post", "put", "patch", "delete", "head", "options", "trace"].contains(&method_str) {
+                                        continue;
+                                    }
+                                    
+                                    if let Some(operation) = method_value.as_mapping_mut() {
+                                        // Get operation_id before mutable borrow
+                                        let operation_id = operation
+                                            .get(&Value::String("operationId".to_string()))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("unknown")
+                                            .to_string();
+                                        
+                                        if let Some(responses) = operation.get_mut(&Value::String("responses".to_string())) {
+                                            if let Some(responses_map) = responses.as_mapping_mut() {
+                                                
+                                                let original_count = responses_map.len();
+                                                let mut success_responses = Vec::new();
+                                                let mut other_responses = Vec::new();
+                                                
+                                                // Separate success (2xx) responses from others
+                                                for (status_key, response_value) in responses_map.iter() {
+                                                    if let Some(status_str) = status_key.as_str() {
+                                                        if status_str.starts_with('2') && status_str.len() == 3 {
+                                                            success_responses.push((status_key.clone(), response_value.clone()));
+                                                        } else {
+                                                            other_responses.push((status_key.clone(), response_value.clone()));
+                                                        }
+                                                    } else {
+                                                        other_responses.push((status_key.clone(), response_value.clone()));
+                                                    }
+                                                }
+                                                
+                                                // Use a more aggressive approach: if there are multiple success responses,
+                                                // or if there's any response complexity, simplify to just one response
+                                                if success_responses.len() > 1 || original_count > 2 {
+                                                    println!("Operation '{}' ({} {}) has {} responses ({}), simplifying to prevent assertion failure", 
+                                                            operation_id, method_str.to_uppercase(), 
+                                                            path_key.as_str().unwrap_or("unknown"), 
+                                                            success_responses.len(),
+                                                            original_count);
+                                                    
+                                                    responses_map.clear();
+                                                    
+                                                    // Keep only one response: prefer first success, then first error, then default
+                                                    if let Some((first_status, first_response)) = success_responses.into_iter().next() {
+                                                        // Also simplify the response content to avoid multiple content types
+                                                        let mut simplified_response = first_response;
+                                                        if let Some(response_obj) = simplified_response.as_mapping_mut() {
+                                                            if let Some(content) = response_obj.get_mut(&Value::String("content".to_string())) {
+                                                                if let Some(content_map) = content.as_mapping_mut() {
+                                                                    // Keep only the first content type to avoid multiple response types
+                                                                    if content_map.len() > 1 {
+                                                                        let first_content_type = content_map.keys().next().cloned();
+                                                                        if let Some(first_key) = first_content_type {
+                                                                            let first_value = content_map.get(&first_key).cloned();
+                                                                            content_map.clear();
+                                                                            if let Some(value) = first_value {
+                                                                                content_map.insert(first_key, value);
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        responses_map.insert(first_status, simplified_response);
+                                                    } else if let Some((first_status, first_response)) = other_responses.iter()
+                                                        .find(|(status_key, _)| {
+                                                            if let Some(status_str) = status_key.as_str() {
+                                                                status_str != "default"
+                                                            } else {
+                                                                true
+                                                            }
+                                                        })
+                                                        .map(|(k, v)| (k.clone(), v.clone())) {
+                                                        responses_map.insert(first_status, first_response);
+                                                    } else if let Some((default_status, default_response)) = other_responses.iter()
+                                                        .find(|(status_key, _)| {
+                                                            if let Some(status_str) = status_key.as_str() {
+                                                                status_str == "default"
+                                                            } else {
+                                                                false
+                                                            }
+                                                        })
+                                                        .map(|(k, v)| (k.clone(), v.clone())) {
+                                                        responses_map.insert(default_status, default_response);
+                                                    }
+                                                    
+                                                    operations_modified += 1;
+                                                    total_responses_removed += original_count - responses_map.len();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if operations_modified > 0 {
+            println!("Modified {} operations, removed {} duplicate responses", 
+                    operations_modified, total_responses_removed);
+        } else {
+            println!("No operations with multiple response types found");
+        }
+        
         Ok(())
     }
 }
