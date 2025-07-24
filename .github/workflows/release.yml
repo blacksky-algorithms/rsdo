@@ -1,0 +1,321 @@
+name: Date-based Release
+
+on:
+  schedule:
+    # Run on the 1st day of every month at 10:00 AM UTC
+    - cron: '0 10 1 * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force create release even if one exists for today'
+        required: false
+        default: false
+        type: boolean
+      skip_publish:
+        description: 'Skip publishing to crates.io'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.github/**'
+      - '*.md'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-and-release:
+    name: Create Date-based Release
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      tag_name: ${{ steps.version.outputs.TAG_NAME }}
+      version: ${{ steps.version.outputs.VERSION }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Generate version and tag
+        id: version
+        run: |
+          # Generate date-based version (YYYY.MM.DD)
+          DATE_VERSION=$(date +'%Y.%m.%d')
+          TAG_NAME="v${DATE_VERSION}"
+          
+          echo "VERSION=${DATE_VERSION}" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "Generated version: ${DATE_VERSION}"
+          echo "Tag name: ${TAG_NAME}"
+
+      - name: Check if should create release
+        id: check
+        run: |
+          TAG_NAME="${{ steps.version.outputs.TAG_NAME }}"
+          FORCE="${{ github.event.inputs.force }}"
+          TRIGGER_TYPE="${{ github.event_name }}"
+          
+          echo "Trigger type: ${TRIGGER_TYPE}"
+          
+          # Check if tag already exists
+          if git tag -l | grep -q "^${TAG_NAME}$"; then
+            if [ "$FORCE" = "true" ]; then
+              echo "Tag ${TAG_NAME} exists but force=true, proceeding with release"
+              echo "should_release=true" >> $GITHUB_OUTPUT
+            elif [ "$TRIGGER_TYPE" = "schedule" ]; then
+              echo "Tag ${TAG_NAME} exists but this is a scheduled run, skipping to avoid duplicate monthly releases"
+              echo "should_release=false" >> $GITHUB_OUTPUT
+            else
+              echo "Tag ${TAG_NAME} already exists and force=false. Skipping release."
+              echo "should_release=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Tag ${TAG_NAME} does not exist, proceeding with release"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          fi
+          
+          # Log the decision
+          if [ "$(cat $GITHUB_OUTPUT | grep should_release=true)" ]; then
+            echo "✅ Will create release for ${TAG_NAME}"
+            if [ "$TRIGGER_TYPE" = "schedule" ]; then
+              echo "📅 Scheduled monthly release"
+            elif [ "$TRIGGER_TYPE" = "workflow_dispatch" ]; then
+              echo "🔧 Manual release trigger"
+            elif [ "$TRIGGER_TYPE" = "push" ]; then
+              echo "🚀 Automatic release on push to main"
+            fi
+          else
+            echo "⏭️ Skipping release creation"
+          fi
+
+      - name: Install Rust stable
+        if: steps.check.outputs.should_release == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        if: steps.check.outputs.should_release == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-release-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Update Cargo.toml version
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          DATE_VERSION="${{ steps.version.outputs.VERSION }}"
+          
+          # Update version in Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"${DATE_VERSION}\"/" Cargo.toml
+          
+          # Verify the change
+          echo "Updated Cargo.toml version:"
+          grep "^version =" Cargo.toml
+
+      - name: Update Cargo.lock
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          cargo check --locked || cargo update
+
+      - name: Build and test
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          cargo build --locked --release
+          cargo test --locked --release
+
+      - name: Commit version changes and create tag
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          TAG_NAME="${{ steps.version.outputs.TAG_NAME }}"
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TRIGGER_TYPE="${{ github.event_name }}"
+          
+          # Create appropriate commit message based on trigger
+          if [ "$TRIGGER_TYPE" = "schedule" ]; then
+            COMMIT_MSG="chore: monthly release v${VERSION}"
+            TAG_MSG="Monthly release ${TAG_NAME}"
+          elif [ "$TRIGGER_TYPE" = "workflow_dispatch" ]; then
+            COMMIT_MSG="chore: manual release v${VERSION}"
+            TAG_MSG="Manual release ${TAG_NAME}"
+          else
+            COMMIT_MSG="chore: release v${VERSION}"
+            TAG_MSG="Release ${TAG_NAME}"
+          fi
+          
+          # Commit version changes
+          git add Cargo.toml Cargo.lock
+          git commit -m "${COMMIT_MSG}"
+          
+          # Delete existing tag if it exists (for force mode)
+          if git tag -l | grep -q "^${TAG_NAME}$"; then
+            git tag -d "${TAG_NAME}"
+            git push origin ":refs/tags/${TAG_NAME}" || true
+          fi
+          
+          # Create new tag
+          git tag -a "${TAG_NAME}" -m "${TAG_MSG}"
+          
+          # Push changes and tag
+          git push origin main
+          git push origin "${TAG_NAME}"
+
+      - name: Generate changelog
+        if: steps.check.outputs.should_release == 'true'
+        id: changelog
+        run: |
+          # Make changelog script executable
+          chmod +x .github/scripts/changelog.sh
+          
+          # Generate changelog content using script
+          CHANGELOG=$(.github/scripts/changelog.sh \
+            "${{ steps.version.outputs.VERSION }}" \
+            "${{ steps.version.outputs.TAG_NAME }}" \
+            "${{ github.event_name }}" \
+            "${{ github.repository }}")
+          
+          # Output for GitHub Actions (handle multiline)
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "Generated changelog for ${{ steps.version.outputs.TAG_NAME }}"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ steps.version.outputs.TAG_NAME }}"
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TRIGGER_TYPE="${{ github.event_name }}"
+          
+          # Determine release title based on trigger
+          if [ "$TRIGGER_TYPE" = "schedule" ]; then
+            RELEASE_TITLE="📅 Monthly Release ${TAG_NAME}"
+          elif [ "$TRIGGER_TYPE" = "workflow_dispatch" ]; then
+            RELEASE_TITLE="🔧 Manual Release ${TAG_NAME}"
+          else
+            RELEASE_TITLE="🚀 Release ${TAG_NAME}"
+          fi
+          
+          # Check if we should use auto-generated notes or custom changelog
+          USE_AUTO_NOTES="${{ vars.USE_AUTO_GENERATED_NOTES || 'false' }}"
+          
+          if [ "$USE_AUTO_NOTES" = "true" ]; then
+            echo "Creating release with auto-generated notes..."
+            gh release create "${TAG_NAME}" \
+              --title "${RELEASE_TITLE}" \
+              --generate-notes \
+              --latest
+          else
+            echo "Creating release with custom changelog..."
+            # Save changelog to temporary file
+            echo '${{ steps.changelog.outputs.CHANGELOG }}' > /tmp/changelog.md
+            
+            gh release create "${TAG_NAME}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file /tmp/changelog.md \
+              --latest
+          fi
+          
+          echo "✅ Created GitHub release: ${TAG_NAME}"
+
+  publish-crate:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: check-and-release
+    if: needs.check-and-release.outputs.should_release == 'true' && github.event.inputs.skip_publish != 'true'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-and-release.outputs.tag_name }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-publish-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Publish to crates.io
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  build-binaries:
+    name: Build Binaries
+    runs-on: ${{ matrix.os }}
+    needs: check-and-release
+    if: needs.check-and-release.outputs.should_release == 'true'
+    
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: rsdo
+            asset_name: rsdo-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: rsdo.exe
+            asset_name: rsdo-windows-x86_64.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: rsdo
+            asset_name: rsdo-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: rsdo
+            asset_name: rsdo-macos-aarch64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-and-release.outputs.tag_name }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build binary
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Upload binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-and-release.outputs.tag_name }}
+          files: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

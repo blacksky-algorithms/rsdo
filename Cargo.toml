@@ -1,0 +1,36 @@
+[package]
+name = "rsdo"
+version = "2025.7.23"
+edition = "2021"
+authors = ["Clinton Bowen <clinton.bowen@gmail.com>"]
+description = "A Rust client library for the DigitalOcean API"
+license = "Apache-2.0"
+repository = "https://https://github.com/blacksky-algorithms/rsdo"
+documentation = "https://docs.rs/rsdo"
+keywords = ["digitalocean", "api", "client", "async"]
+categories = ["api-bindings", "web-programming::http-client"]
+
+[dependencies]
+progenitor-client = { path = "../progenitor/progenitor-client" }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regress = "0.10"
+futures = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["serde", "v4"] }
+thiserror = "1.0"
+
+[build-dependencies]
+progenitor = { path = "../progenitor/progenitor" }
+progenitor-impl = { path = "../progenitor/progenitor-impl" }
+serde_json = "1.0"
+serde_yaml = "0.9"
+openapiv3 = "2.0"
+syn = "2.0"
+prettyplease = "0.2"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+zip = "2.1"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
