@@ -373,11 +373,11 @@ jobs:
 
       - name: Generate SBOM (JSON)
         run: |
-          cargo cyclonedx --format json --output-file rsdo-sbom-${{ needs.check-and-release.outputs.version }}.json
+          cargo cyclonedx --format json --override-filename rsdo-sbom-${{ needs.check-and-release.outputs.version }}.json
 
       - name: Generate SBOM (XML)
         run: |
-          cargo cyclonedx --format xml --output-file rsdo-sbom-${{ needs.check-and-release.outputs.version }}.xml
+          cargo cyclonedx --format xml --override-filename rsdo-sbom-${{ needs.check-and-release.outputs.version }}.xml
 
       - name: Upload SBOM files to release
         uses: softprops/action-gh-release@v2
