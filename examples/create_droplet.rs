@@ -3,14 +3,14 @@
 //! Usage: cargo run --example create_droplet
 //! Requires: DIGITALOCEAN_TOKEN environment variable
 
-use rsdo::{Client, types::*};
+use rsdo::{types::*, Client};
 use std::env;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get the API token from environment
-    let token = env::var("DIGITALOCEAN_TOKEN")
-        .expect("Please set DIGITALOCEAN_TOKEN environment variable");
+    let token =
+        env::var("DIGITALOCEAN_TOKEN").expect("Please set DIGITALOCEAN_TOKEN environment variable");
 
     // Create the client
     let client = Client::from_token(&token);
@@ -20,29 +20,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // First, let's check available regions and sizes
     println!("📍 Checking available regions...");
     let regions = client.regions_list(None, None).await?;
-    let available_regions: Vec<_> = regions.into_inner().regions
+    let available_regions: Vec<_> = regions
+        .into_inner()
+        .regions
         .into_iter()
         .filter(|r| r.available)
         .map(|r| format!("{} ({})", r.name, r.slug))
         .take(5)
         .collect();
-    
+
     println!("Available regions: {}", available_regions.join(", "));
 
     println!("\n💾 Checking available sizes...");
     let sizes = client.sizes_list(None, None).await?;
-    let small_sizes: Vec<_> = sizes.into_inner().sizes
+    let small_sizes: Vec<_> = sizes
+        .into_inner()
+        .sizes
         .into_iter()
         .filter(|s| s.memory <= 2048) // Only show smaller sizes
         .map(|s| format!("{} ({}MB RAM, ${})", s.slug, s.memory, s.price_monthly))
         .take(5)
         .collect();
-    
+
     println!("Available sizes: {}", small_sizes.join(", "));
 
     // Create droplet configuration
-    let droplet_name = format!("rsdo-example-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
-    
+    let droplet_name = format!(
+        "rsdo-example-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    );
+
     let create_request = DropletsCreateBody::SingleDropletRequest {
         name: droplet_name.clone().parse()?,
         region: Some("nyc1".to_string()),
@@ -64,7 +74,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 echo "Hello from rsdo!" > /tmp/rsdo-hello.txt
 apt-get update
 apt-get install -y curl
-"#.to_string(),
+"#
+            .to_string(),
         ),
         volumes: vec![],
         vpc_uuid: None,

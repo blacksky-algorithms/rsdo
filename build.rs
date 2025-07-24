@@ -1,10 +1,9 @@
+use serde_yaml::Value;
 use std::{
     collections::HashMap,
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
-use serde_yaml::Value;
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -30,18 +29,27 @@ fn main() {
                 Ok(generated_code) => {
                     fs::write(&output_path, generated_code)
                         .unwrap_or_else(|e| panic!("Failed to write generated client code: {}", e));
-                    println!("Generated DigitalOcean client code at: {}", output_path.display());
+                    println!(
+                        "Generated DigitalOcean client code at: {}",
+                        output_path.display()
+                    );
                 }
                 Err(e) => {
                     eprintln!("Failed to generate client code: {}", e);
-                    println!("cargo:warning=Failed to generate client code: {}, using fallback stub", e);
+                    println!(
+                        "cargo:warning=Failed to generate client code: {}, using fallback stub",
+                        e
+                    );
                     write_stub_client(&output_path);
                 }
             }
         }
         Err(e) => {
             eprintln!("Failed to process OpenAPI spec: {}", e);
-            println!("cargo:warning=Failed to process OpenAPI spec: {}, using fallback stub", e);
+            println!(
+                "cargo:warning=Failed to process OpenAPI spec: {}, using fallback stub",
+                e
+            );
             write_stub_client(&output_path);
         }
     }
@@ -49,28 +57,27 @@ fn main() {
 
 fn download_openapi_spec(spec_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     println!("Downloading DigitalOcean OpenAPI specification...");
-    
+
     let url = "https://github.com/digitalocean/openapi/archive/refs/heads/main.zip";
     let response = reqwest::blocking::get(url)?;
-    
+
     if !response.status().is_success() {
         return Err(format!("Failed to download: HTTP {}", response.status()).into());
     }
-    
+
     let bytes = response.bytes()?;
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
-    
+
     // Extract all files
     for i in 0..zip.len() {
         let mut file = zip.by_index(i)?;
-        let enclosed_name = file.enclosed_name()
-            .ok_or("Invalid file path in zip")?;
+        let enclosed_name = file.enclosed_name().ok_or("Invalid file path in zip")?;
         let outpath = spec_dir.join(
             enclosed_name
                 .strip_prefix("openapi-main/")
-                .unwrap_or(&enclosed_name)
+                .unwrap_or(&enclosed_name),
         );
-        
+
         if file.name().ends_with('/') {
             fs::create_dir_all(&outpath)?;
         } else {
@@ -81,20 +88,20 @@ fn download_openapi_spec(spec_dir: &Path) -> Result<(), Box<dyn std::error::Erro
             std::io::copy(&mut file, &mut outfile)?;
         }
     }
-    
+
     println!("Downloaded OpenAPI specification successfully");
     Ok(())
 }
 
 fn process_openapi_spec(spec_path: &Path) -> Result<Value, Box<dyn std::error::Error>> {
     println!("Processing OpenAPI specification with reference resolution...");
-    
+
     let spec_dir = spec_path.parent().ok_or("Invalid spec path")?;
     let mut resolver = RefResolver::new(spec_dir);
-    
+
     let root_spec = resolver.load_yaml_file(spec_path)?;
     let resolved_spec = resolver.resolve_refs(root_spec)?;
-    
+
     println!("Successfully resolved all OpenAPI references");
     Ok(resolved_spec)
 }
@@ -115,12 +122,12 @@ impl RefResolver {
             root_spec: None,
         }
     }
-    
+
     fn load_yaml_file(&mut self, path: &Path) -> Result<Value, Box<dyn std::error::Error>> {
         if let Some(cached) = self.cache.get(path) {
             return Ok(cached.clone());
         }
-        
+
         let content = match fs::read_to_string(path) {
             Ok(content) => content,
             Err(e) => {
@@ -133,7 +140,8 @@ impl RefResolver {
                 // Try to handle specific parsing issues
                 if content.contains("18446744073709552000") {
                     // Replace the problematic large integer with a smaller one
-                    let fixed_content = content.replace("18446744073709552000", "18446744073709551615");
+                    let fixed_content =
+                        content.replace("18446744073709552000", "18446744073709551615");
                     serde_yaml::from_str(&fixed_content)?
                 } else {
                     return Err(e.into());
@@ -143,37 +151,46 @@ impl RefResolver {
         self.cache.insert(path.to_path_buf(), value.clone());
         Ok(value)
     }
-    
+
     fn resolve_refs(&mut self, mut value: Value) -> Result<Value, Box<dyn std::error::Error>> {
         // Store the root spec for internal reference resolution
         self.root_spec = Some(value.clone());
-        
+
         // Add missing definitions for common DigitalOcean API patterns
         self.add_missing_definitions(&mut value)?;
-        
+
         // Update root spec after adding definitions
         self.root_spec = Some(value.clone());
-        
+
         // Run reference resolution multiple times to handle internal references
         for i in 0..3 {
             println!("Reference resolution pass {}", i + 1);
             self.resolve_refs_recursive(&mut value, &self.spec_dir.clone())?;
         }
-        
+
         // Clean up any remaining unresolved references
         self.clean_unresolved_refs(&mut value)?;
-        
+
         // Deduplicate response types to prevent progenitor 0.11.0 assertion failures
         self.deduplicate_response_types(&mut value)?;
-        
+
         Ok(value)
     }
-    
-    fn resolve_refs_recursive(&mut self, value: &mut Value, current_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn resolve_refs_recursive(
+        &mut self,
+        value: &mut Value,
+        current_dir: &Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.resolve_refs_in_context(value, current_dir, None)
     }
-    
-    fn resolve_refs_in_context(&mut self, value: &mut Value, current_dir: &Path, _context_value: Option<&Value>) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn resolve_refs_in_context(
+        &mut self,
+        value: &mut Value,
+        current_dir: &Path,
+        _context_value: Option<&Value>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         match value {
             Value::Mapping(map) => {
                 // Check for $ref
@@ -184,7 +201,7 @@ impl RefResolver {
                         return Ok(());
                     }
                 }
-                
+
                 // Recursively process all values in the mapping
                 for (_, v) in map.iter_mut() {
                     self.resolve_refs_in_context(v, current_dir, None)?;
@@ -199,23 +216,32 @@ impl RefResolver {
         }
         Ok(())
     }
-    
-    fn resolve_single_ref(&mut self, ref_str: &str, current_dir: &Path) -> Result<Value, Box<dyn std::error::Error>> {
+
+    fn resolve_single_ref(
+        &mut self,
+        ref_str: &str,
+        current_dir: &Path,
+    ) -> Result<Value, Box<dyn std::error::Error>> {
         self.resolve_single_ref_with_context(ref_str, current_dir, None)
     }
-    
-    fn resolve_single_ref_with_context(&mut self, ref_str: &str, current_dir: &Path, context_value: Option<&Value>) -> Result<Value, Box<dyn std::error::Error>> {
+
+    fn resolve_single_ref_with_context(
+        &mut self,
+        ref_str: &str,
+        current_dir: &Path,
+        context_value: Option<&Value>,
+    ) -> Result<Value, Box<dyn std::error::Error>> {
         if ref_str.starts_with('#') {
             // Internal reference - first try context, then root document
             let pointer = &ref_str[1..]; // Remove the '#'
-            
+
             // Try context first for file-local references
             if let Some(context) = context_value {
                 if let Ok(result) = self.apply_json_pointer(context, pointer) {
                     return Ok(result);
                 }
             }
-            
+
             // Fall back to root document
             if let Some(root) = &self.root_spec {
                 return self.apply_json_pointer(root, pointer);
@@ -223,25 +249,25 @@ impl RefResolver {
                 return Err("Internal reference found but no root spec available".into());
             }
         }
-        
+
         // Parse file path and optional JSON pointer
         let (file_part, pointer_part) = if let Some(hash_pos) = ref_str.find('#') {
             (&ref_str[..hash_pos], Some(&ref_str[hash_pos + 1..]))
         } else {
             (ref_str, None)
         };
-        
+
         // Handle empty file part (internal reference only)
         if file_part.is_empty() {
             let pointer = pointer_part.unwrap_or("");
-            
+
             // Try context first for file-local references
             if let Some(context) = context_value {
                 if let Ok(result) = self.apply_json_pointer(context, pointer) {
                     return Ok(result);
                 }
             }
-            
+
             // Fall back to root document
             if let Some(root) = &self.root_spec {
                 return self.apply_json_pointer(root, pointer);
@@ -249,61 +275,83 @@ impl RefResolver {
                 return Err("Internal reference found but no root spec available".into());
             }
         }
-        
+
         // Resolve file path relative to current directory
         let mut file_path = current_dir.join(file_part);
-        
+
         // Handle problematic relative paths that go too far up the directory tree
         if !file_path.exists() && file_part.starts_with("../../../shared/") {
             // Try the corrected path within the specification directory
             let corrected_part = file_part.replace("../../../shared/", "shared/");
             file_path = current_dir.join(&corrected_part);
-            println!("Corrected problematic path '{}' to '{}' -> {}", 
-                    file_part, corrected_part, file_path.display());
+            println!(
+                "Corrected problematic path '{}' to '{}' -> {}",
+                file_part,
+                corrected_part,
+                file_path.display()
+            );
         }
-        
+
         // Validate the file exists before trying to canonicalize
         let canonical_path = if file_path.exists() {
             match file_path.canonicalize() {
                 Ok(path) => path,
                 Err(e) => {
-                    return Err(format!("Failed to canonicalize path '{}': {}", file_path.display(), e).into());
+                    return Err(format!(
+                        "Failed to canonicalize path '{}': {}",
+                        file_path.display(),
+                        e
+                    )
+                    .into());
                 }
             }
         } else {
             // For any missing file reference, use a fallback approach
             // This is more robust than trying to enumerate all possible missing files
-            println!("Using fallback for missing file reference: {} -> {}", file_part, file_path.display());
+            println!(
+                "Using fallback for missing file reference: {} -> {}",
+                file_part,
+                file_path.display()
+            );
             // Return a simple object type as fallback
-            return Ok(serde_yaml::from_str(r#"
+            return Ok(serde_yaml::from_str(
+                r#"
 type: object
 description: "Fallback schema for missing file reference"
 additionalProperties: true
-"#)?);
+"#,
+            )?);
         };
-        
+
         // Check for circular reference
         if self.resolving.contains(&canonical_path) {
-            return Err(format!("Circular reference detected: {}", canonical_path.display()).into());
+            return Err(
+                format!("Circular reference detected: {}", canonical_path.display()).into(),
+            );
         }
-        
+
         self.resolving.insert(canonical_path.clone());
-        
+
         // Load and resolve the referenced file
         let mut referenced_value = match self.load_yaml_file(&canonical_path) {
             Ok(value) => value,
             Err(e) => {
                 self.resolving.remove(&canonical_path);
-                return Err(format!("Failed to load referenced file '{}': {}", canonical_path.display(), e).into());
+                return Err(format!(
+                    "Failed to load referenced file '{}': {}",
+                    canonical_path.display(),
+                    e
+                )
+                .into());
             }
         };
-        
+
         // Resolve refs in the referenced file with its directory as context
         let referenced_dir = canonical_path.parent().unwrap_or(current_dir);
         self.resolve_refs_with_file_context(&mut referenced_value, referenced_dir)?;
-        
+
         self.resolving.remove(&canonical_path);
-        
+
         // Apply JSON pointer if present
         if let Some(pointer) = pointer_part {
             if !pointer.is_empty() {
@@ -311,17 +359,26 @@ additionalProperties: true
                 referenced_value = self.apply_json_pointer(&referenced_value, pointer)?;
             }
         }
-        
+
         Ok(referenced_value)
     }
-    
-    fn resolve_refs_with_file_context(&mut self, value: &mut Value, current_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn resolve_refs_with_file_context(
+        &mut self,
+        value: &mut Value,
+        current_dir: &Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Store the original file value for resolving internal references
         let original_file_value = value.clone();
         self.resolve_refs_with_context_value(value, current_dir, &original_file_value)
     }
-    
-    fn resolve_refs_with_context_value(&mut self, value: &mut Value, current_dir: &Path, file_context: &Value) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn resolve_refs_with_context_value(
+        &mut self,
+        value: &mut Value,
+        current_dir: &Path,
+        file_context: &Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         match value {
             Value::Mapping(map) => {
                 // Check for $ref
@@ -339,7 +396,7 @@ additionalProperties: true
                         return Ok(());
                     }
                 }
-                
+
                 // Recursively process all values in the mapping
                 for (_, v) in map.iter_mut() {
                     self.resolve_refs_with_context_value(v, current_dir, file_context)?;
@@ -354,15 +411,19 @@ additionalProperties: true
         }
         Ok(())
     }
-    
-    fn apply_json_pointer(&self, value: &Value, pointer: &str) -> Result<Value, Box<dyn std::error::Error>> {
+
+    fn apply_json_pointer(
+        &self,
+        value: &Value,
+        pointer: &str,
+    ) -> Result<Value, Box<dyn std::error::Error>> {
         if pointer.is_empty() || pointer == "/" {
             return Ok(value.clone());
         }
-        
+
         let parts: Vec<&str> = pointer.split('/').skip(1).collect(); // Skip first empty part
         let mut current = value;
-        
+
         for part in parts {
             match current {
                 Value::Mapping(map) => {
@@ -378,41 +439,55 @@ additionalProperties: true
                                 }
                             }
                         }
-                        
+
                         // If the JSON pointer path is not found, return a fallback definition immediately
-                        println!("Creating fallback definition for missing JSON pointer path: {}", part);
-                        return Ok(serde_yaml::from_str(&format!(r#"
+                        println!(
+                            "Creating fallback definition for missing JSON pointer path: {}",
+                            part
+                        );
+                        return Ok(serde_yaml::from_str(&format!(
+                            r#"
 type: object
 description: "Auto-generated fallback definition for: {}"
 additionalProperties: true
-"#, part)).unwrap_or_else(|_| Value::Mapping(serde_yaml::Mapping::new())));
+"#,
+                            part
+                        ))
+                        .unwrap_or_else(|_| Value::Mapping(serde_yaml::Mapping::new())));
                     }
                 }
                 Value::Sequence(seq) => {
-                    let index: usize = part.parse()
+                    let index: usize = part
+                        .parse()
                         .map_err(|_| format!("Invalid array index in JSON pointer: {}", part))?;
-                    current = seq.get(index)
+                    current = seq
+                        .get(index)
                         .ok_or_else(|| format!("Array index out of bounds: {}", index))?;
                 }
                 _ => {
-                    return Err(format!("Cannot apply JSON pointer to non-object/array: {}", part).into());
+                    return Err(
+                        format!("Cannot apply JSON pointer to non-object/array: {}", part).into(),
+                    );
                 }
             }
         }
-        
+
         Ok(current.clone())
     }
-    
-    fn add_missing_definitions(&mut self, value: &mut Value) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn add_missing_definitions(
+        &mut self,
+        value: &mut Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(obj) = value.as_mapping_mut() {
             // Create the definitions/components section if it doesn't exist
             if !obj.contains_key(&Value::String("definitions".to_string())) {
                 obj.insert(
-                    Value::String("definitions".to_string()), 
-                    Value::Mapping(serde_yaml::Mapping::new())
+                    Value::String("definitions".to_string()),
+                    Value::Mapping(serde_yaml::Mapping::new()),
                 );
             }
-            
+
             if let Some(definitions) = obj.get_mut(&Value::String("definitions".to_string())) {
                 if let Some(def_map) = definitions.as_mapping_mut() {
                     self.add_pagination_link_definitions(def_map)?;
@@ -422,10 +497,14 @@ additionalProperties: true
         }
         Ok(())
     }
-    
-    fn add_pagination_link_definitions(&self, definitions: &mut serde_yaml::Mapping) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn add_pagination_link_definitions(
+        &self,
+        definitions: &mut serde_yaml::Mapping,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Add forward_links definition for pagination
-        let forward_links = serde_yaml::from_str(r#"
+        let forward_links = serde_yaml::from_str(
+            r#"
 type: object
 properties:
   first:
@@ -440,10 +519,12 @@ properties:
     type: string
     format: uri
     example: "https://api.digitalocean.com/v2/images?page=2"
-"#)?;
-        
+"#,
+        )?;
+
         // Add backward_links definition for pagination
-        let backward_links = serde_yaml::from_str(r#"
+        let backward_links = serde_yaml::from_str(
+            r#"
 type: object
 properties:
   first:
@@ -458,18 +539,23 @@ properties:
     type: string
     format: uri
     example: "https://api.digitalocean.com/v2/images?page=1"
-"#)?;
+"#,
+        )?;
 
         definitions.insert(Value::String("forward_links".to_string()), forward_links);
         definitions.insert(Value::String("backward_links".to_string()), backward_links);
-        
+
         println!("Added pagination link definitions (forward_links, backward_links)");
         Ok(())
     }
-    
-    fn add_common_attribute_definitions(&self, definitions: &mut serde_yaml::Mapping) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn add_common_attribute_definitions(
+        &self,
+        definitions: &mut serde_yaml::Mapping,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Add common tag array definition often missing from shared attributes
-        let existing_tags_array = serde_yaml::from_str(r#"
+        let existing_tags_array = serde_yaml::from_str(
+            r#"
 type: array
 items:
   type: object
@@ -491,12 +577,17 @@ items:
   required:
     - name
     - resources
-"#)?;
+"#,
+        )?;
 
-        definitions.insert(Value::String("existing_tags_array".to_string()), existing_tags_array);
-        
+        definitions.insert(
+            Value::String("existing_tags_array".to_string()),
+            existing_tags_array,
+        );
+
         // Add basic error response definition
-        let error_response = serde_yaml::from_str(r#"
+        let error_response = serde_yaml::from_str(
+            r#"
 type: object
 properties:
   id:
@@ -511,12 +602,14 @@ properties:
 required:
   - id
   - message
-"#)?;
+"#,
+        )?;
 
         definitions.insert(Value::String("error_response".to_string()), error_response);
-        
+
         // Add kubernetes node pool taint definition (commonly referenced but missing)
-        let kubernetes_node_pool_taint = serde_yaml::from_str(r#"
+        let kubernetes_node_pool_taint = serde_yaml::from_str(
+            r#"
 type: object
 properties:
   key:
@@ -538,24 +631,31 @@ properties:
 required:
   - key
   - effect
-"#)?;
+"#,
+        )?;
 
-        definitions.insert(Value::String("kubernetes_node_pool_taint".to_string()), kubernetes_node_pool_taint);
-        
+        definitions.insert(
+            Value::String("kubernetes_node_pool_taint".to_string()),
+            kubernetes_node_pool_taint,
+        );
+
         // Add region state definition
-        let region_state = serde_yaml::from_str(r#"
+        let region_state = serde_yaml::from_str(
+            r#"
 type: string
 enum:
   - available
   - unavailable
 example: "available"
 description: "The availability state of the region"
-"#)?;
+"#,
+        )?;
 
         definitions.insert(Value::String("region_state".to_string()), region_state);
-        
-        // Add API chatbot definition  
-        let api_chatbot = serde_yaml::from_str(r#"
+
+        // Add API chatbot definition
+        let api_chatbot = serde_yaml::from_str(
+            r#"
 type: object
 properties:
   id:
@@ -570,47 +670,58 @@ properties:
   settings:
     type: object
     additionalProperties: true
-"#)?;
+"#,
+        )?;
 
         definitions.insert(Value::String("apiChatbot".to_string()), api_chatbot);
-        
+
         println!("Added common attribute definitions (existing_tags_array, error_response, kubernetes_node_pool_taint, region_state, apiChatbot)");
         Ok(())
     }
-    
+
     fn clean_unresolved_refs(&self, value: &mut Value) -> Result<(), Box<dyn std::error::Error>> {
         match value {
             Value::Mapping(map) => {
                 // Check for unresolved $ref patterns
-                let ref_to_replace = if let Some(ref_value) = map.get(&Value::String("$ref".to_string())) {
-                    if let Some(ref_str) = ref_value.as_str() {
-                        // Handle common unresolved patterns
-                        if ref_str.contains("../../../shared/") || 
-                           ref_str.starts_with("#/api") ||
-                           ref_str.contains("node.yml") ||
-                           ref_str.contains("shared/attributes/") ||
-                           ref_str.ends_with(".yml") && !ref_str.contains("#") {
-                            Some(ref_str.to_string())
+                let ref_to_replace =
+                    if let Some(ref_value) = map.get(&Value::String("$ref".to_string())) {
+                        if let Some(ref_str) = ref_value.as_str() {
+                            // Handle common unresolved patterns
+                            if ref_str.contains("../../../shared/")
+                                || ref_str.starts_with("#/api")
+                                || ref_str.contains("node.yml")
+                                || ref_str.contains("shared/attributes/")
+                                || ref_str.ends_with(".yml") && !ref_str.contains("#")
+                            {
+                                Some(ref_str.to_string())
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
                     } else {
                         None
-                    }
-                } else {
-                    None
-                };
-                
+                    };
+
                 if let Some(ref_str) = ref_to_replace {
                     // Replace with a generic string type
-                    println!("Replacing unresolved reference '{}' with fallback schema", ref_str);
+                    println!(
+                        "Replacing unresolved reference '{}' with fallback schema",
+                        ref_str
+                    );
                     map.clear();
-                    map.insert(Value::String("type".to_string()), Value::String("string".to_string()));
-                    map.insert(Value::String("description".to_string()), 
-                             Value::String(format!("Fallback for unresolved reference: {}", ref_str)));
+                    map.insert(
+                        Value::String("type".to_string()),
+                        Value::String("string".to_string()),
+                    );
+                    map.insert(
+                        Value::String("description".to_string()),
+                        Value::String(format!("Fallback for unresolved reference: {}", ref_str)),
+                    );
                     return Ok(());
                 }
-                
+
                 // Recursively clean all values in the mapping
                 for (_, v) in map.iter_mut() {
                     self.clean_unresolved_refs(v)?;
@@ -625,12 +736,15 @@ properties:
         }
         Ok(())
     }
-    
-    fn deduplicate_response_types(&self, value: &mut Value) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn deduplicate_response_types(
+        &self,
+        value: &mut Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         println!("Deduplicating response types to prevent progenitor assertion failures...");
         let mut operations_modified = 0;
         let mut total_responses_removed = 0;
-        
+
         if let Some(obj) = value.as_mapping_mut() {
             if let Some(paths) = obj.get_mut(&Value::String("paths".to_string())) {
                 if let Some(paths_map) = paths.as_mapping_mut() {
@@ -640,10 +754,15 @@ properties:
                             for (method_key, method_value) in path_obj.iter_mut() {
                                 if let Some(method_str) = method_key.as_str() {
                                     // Skip non-HTTP method keys like "parameters"
-                                    if !["get", "post", "put", "patch", "delete", "head", "options", "trace"].contains(&method_str) {
+                                    if ![
+                                        "get", "post", "put", "patch", "delete", "head", "options",
+                                        "trace",
+                                    ]
+                                    .contains(&method_str)
+                                    {
                                         continue;
                                     }
-                                    
+
                                     if let Some(operation) = method_value.as_mapping_mut() {
                                         // Get operation_id before mutable borrow
                                         let operation_id = operation
@@ -651,84 +770,147 @@ properties:
                                             .and_then(|v| v.as_str())
                                             .unwrap_or("unknown")
                                             .to_string();
-                                        
-                                        if let Some(responses) = operation.get_mut(&Value::String("responses".to_string())) {
-                                            if let Some(responses_map) = responses.as_mapping_mut() {
-                                                
+
+                                        if let Some(responses) = operation
+                                            .get_mut(&Value::String("responses".to_string()))
+                                        {
+                                            if let Some(responses_map) = responses.as_mapping_mut()
+                                            {
                                                 let original_count = responses_map.len();
                                                 let mut success_responses = Vec::new();
                                                 let mut other_responses = Vec::new();
-                                                
+
                                                 // Separate success (2xx) responses from others
-                                                for (status_key, response_value) in responses_map.iter() {
+                                                for (status_key, response_value) in
+                                                    responses_map.iter()
+                                                {
                                                     if let Some(status_str) = status_key.as_str() {
-                                                        if status_str.starts_with('2') && status_str.len() == 3 {
-                                                            success_responses.push((status_key.clone(), response_value.clone()));
+                                                        if status_str.starts_with('2')
+                                                            && status_str.len() == 3
+                                                        {
+                                                            success_responses.push((
+                                                                status_key.clone(),
+                                                                response_value.clone(),
+                                                            ));
                                                         } else {
-                                                            other_responses.push((status_key.clone(), response_value.clone()));
+                                                            other_responses.push((
+                                                                status_key.clone(),
+                                                                response_value.clone(),
+                                                            ));
                                                         }
                                                     } else {
-                                                        other_responses.push((status_key.clone(), response_value.clone()));
+                                                        other_responses.push((
+                                                            status_key.clone(),
+                                                            response_value.clone(),
+                                                        ));
                                                     }
                                                 }
-                                                
+
                                                 // Use a more aggressive approach: if there are multiple success responses,
                                                 // or if there's any response complexity, simplify to just one response
-                                                if success_responses.len() > 1 || original_count > 2 {
+                                                if success_responses.len() > 1 || original_count > 2
+                                                {
                                                     println!("Operation '{}' ({} {}) has {} responses ({}), simplifying to prevent assertion failure", 
-                                                            operation_id, method_str.to_uppercase(), 
-                                                            path_key.as_str().unwrap_or("unknown"), 
+                                                            operation_id, method_str.to_uppercase(),
+                                                            path_key.as_str().unwrap_or("unknown"),
                                                             success_responses.len(),
                                                             original_count);
-                                                    
+
                                                     responses_map.clear();
-                                                    
+
                                                     // Keep only one response: prefer first success, then first error, then default
-                                                    if let Some((first_status, first_response)) = success_responses.into_iter().next() {
+                                                    if let Some((first_status, first_response)) =
+                                                        success_responses.into_iter().next()
+                                                    {
                                                         // Also simplify the response content to avoid multiple content types
-                                                        let mut simplified_response = first_response;
-                                                        if let Some(response_obj) = simplified_response.as_mapping_mut() {
-                                                            if let Some(content) = response_obj.get_mut(&Value::String("content".to_string())) {
-                                                                if let Some(content_map) = content.as_mapping_mut() {
+                                                        let mut simplified_response =
+                                                            first_response;
+                                                        if let Some(response_obj) =
+                                                            simplified_response.as_mapping_mut()
+                                                        {
+                                                            if let Some(content) = response_obj
+                                                                .get_mut(&Value::String(
+                                                                    "content".to_string(),
+                                                                ))
+                                                            {
+                                                                if let Some(content_map) =
+                                                                    content.as_mapping_mut()
+                                                                {
                                                                     // Keep only the first content type to avoid multiple response types
                                                                     if content_map.len() > 1 {
-                                                                        let first_content_type = content_map.keys().next().cloned();
-                                                                        if let Some(first_key) = first_content_type {
-                                                                            let first_value = content_map.get(&first_key).cloned();
+                                                                        let first_content_type =
+                                                                            content_map
+                                                                                .keys()
+                                                                                .next()
+                                                                                .cloned();
+                                                                        if let Some(first_key) =
+                                                                            first_content_type
+                                                                        {
+                                                                            let first_value =
+                                                                                content_map
+                                                                                    .get(&first_key)
+                                                                                    .cloned();
                                                                             content_map.clear();
-                                                                            if let Some(value) = first_value {
-                                                                                content_map.insert(first_key, value);
+                                                                            if let Some(value) =
+                                                                                first_value
+                                                                            {
+                                                                                content_map.insert(
+                                                                                    first_key,
+                                                                                    value,
+                                                                                );
                                                                             }
                                                                         }
                                                                     }
                                                                 }
                                                             }
                                                         }
-                                                        responses_map.insert(first_status, simplified_response);
-                                                    } else if let Some((first_status, first_response)) = other_responses.iter()
+                                                        responses_map.insert(
+                                                            first_status,
+                                                            simplified_response,
+                                                        );
+                                                    } else if let Some((
+                                                        first_status,
+                                                        first_response,
+                                                    )) = other_responses
+                                                        .iter()
                                                         .find(|(status_key, _)| {
-                                                            if let Some(status_str) = status_key.as_str() {
+                                                            if let Some(status_str) =
+                                                                status_key.as_str()
+                                                            {
                                                                 status_str != "default"
                                                             } else {
                                                                 true
                                                             }
                                                         })
-                                                        .map(|(k, v)| (k.clone(), v.clone())) {
-                                                        responses_map.insert(first_status, first_response);
-                                                    } else if let Some((default_status, default_response)) = other_responses.iter()
+                                                        .map(|(k, v)| (k.clone(), v.clone()))
+                                                    {
+                                                        responses_map
+                                                            .insert(first_status, first_response);
+                                                    } else if let Some((
+                                                        default_status,
+                                                        default_response,
+                                                    )) = other_responses
+                                                        .iter()
                                                         .find(|(status_key, _)| {
-                                                            if let Some(status_str) = status_key.as_str() {
+                                                            if let Some(status_str) =
+                                                                status_key.as_str()
+                                                            {
                                                                 status_str == "default"
                                                             } else {
                                                                 false
                                                             }
                                                         })
-                                                        .map(|(k, v)| (k.clone(), v.clone())) {
-                                                        responses_map.insert(default_status, default_response);
+                                                        .map(|(k, v)| (k.clone(), v.clone()))
+                                                    {
+                                                        responses_map.insert(
+                                                            default_status,
+                                                            default_response,
+                                                        );
                                                     }
-                                                    
+
                                                     operations_modified += 1;
-                                                    total_responses_removed += original_count - responses_map.len();
+                                                    total_responses_removed +=
+                                                        original_count - responses_map.len();
                                                 }
                                             }
                                         }
@@ -740,24 +922,26 @@ properties:
                 }
             }
         }
-        
+
         if operations_modified > 0 {
-            println!("Modified {} operations, removed {} duplicate responses", 
-                    operations_modified, total_responses_removed);
+            println!(
+                "Modified {} operations, removed {} duplicate responses",
+                operations_modified, total_responses_removed
+            );
         } else {
             println!("No operations with multiple response types found");
         }
-        
+
         Ok(())
     }
 }
 
 fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Error>> {
     println!("Generating Rust client code using progenitor...");
-    
+
     // Convert YAML to JSON for progenitor
     let json_spec = serde_json::to_string_pretty(spec)?;
-    
+
     // Debug: Save resolved spec to file for inspection
     if let Ok(out_dir) = std::env::var("OUT_DIR") {
         let debug_path = std::path::Path::new(&out_dir).join("resolved_spec.json");
@@ -767,29 +951,30 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
             println!("Debug: Saved resolved spec to {}", debug_path.display());
         }
     }
-    
+
     // Parse the OpenAPI spec
     println!("Parsing OpenAPI specification...");
-    let openapi_spec: openapiv3::OpenAPI = match serde_json::from_str::<openapiv3::OpenAPI>(&json_spec) {
-        Ok(spec) => {
-            println!("Successfully parsed OpenAPI spec");
-            println!("API Info: {} v{}", spec.info.title, spec.info.version);
-            if let Some(components) = &spec.components {
-                println!("Found {} component schemas", components.schemas.len());
+    let openapi_spec: openapiv3::OpenAPI =
+        match serde_json::from_str::<openapiv3::OpenAPI>(&json_spec) {
+            Ok(spec) => {
+                println!("Successfully parsed OpenAPI spec");
+                println!("API Info: {} v{}", spec.info.title, spec.info.version);
+                if let Some(components) = &spec.components {
+                    println!("Found {} component schemas", components.schemas.len());
+                }
+                println!("Found {} API paths", spec.paths.paths.len());
+                spec
             }
-            println!("Found {} API paths", spec.paths.paths.len());
-            spec
-        },
-        Err(e) => {
-            eprintln!("Failed to parse resolved OpenAPI spec: {}", e);
-            return Err(format!("Failed to parse resolved OpenAPI spec: {}", e).into());
-        }
-    };
-    
+            Err(e) => {
+                eprintln!("Failed to parse resolved OpenAPI spec: {}", e);
+                return Err(format!("Failed to parse resolved OpenAPI spec: {}", e).into());
+            }
+        };
+
     // Generate the client using progenitor
     println!("Creating progenitor generator...");
     let mut generator = progenitor::Generator::default();
-    
+
     println!("Starting token generation with progenitor...");
     let tokens = match generator.generate_tokens(&openapi_spec) {
         Ok(t) => {
@@ -799,7 +984,7 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
         Err(e) => {
             eprintln!("Failed to generate tokens: {}", e);
             eprintln!("Error details: {:#?}", e);
-            
+
             // Save additional debug information
             if let Ok(out_dir) = std::env::var("OUT_DIR") {
                 let error_path = std::path::Path::new(&out_dir).join("generation_error.txt");
@@ -810,11 +995,11 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
                     println!("Debug: Saved error info to {}", error_path.display());
                 }
             }
-            
+
             return Err(e.into());
         }
     };
-    
+
     println!("Parsing generated tokens into syntax tree...");
     let syntax_tree = match syn::parse2(tokens) {
         Ok(tree) => {
@@ -826,11 +1011,14 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
             return Err(format!("Failed to parse generated tokens: {}", e).into());
         }
     };
-    
+
     println!("Converting syntax tree to formatted code...");
     let code = prettyplease::unparse(&syntax_tree);
-    
-    println!("Successfully generated {} characters of Rust client code", code.len());
+
+    println!(
+        "Successfully generated {} characters of Rust client code",
+        code.len()
+    );
     Ok(code)
 }
 
@@ -954,4 +1142,3 @@ impl<T> ResponseValue<T> {
     fs::write(output_path, stub_content)
         .unwrap_or_else(|e| panic!("Failed to write stub client code: {}", e));
 }
-

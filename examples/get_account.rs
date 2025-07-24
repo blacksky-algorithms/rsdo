@@ -9,8 +9,8 @@ use std::env;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get the API token from environment
-    let token = env::var("DIGITALOCEAN_TOKEN")
-        .expect("Please set DIGITALOCEAN_TOKEN environment variable");
+    let token =
+        env::var("DIGITALOCEAN_TOKEN").expect("Please set DIGITALOCEAN_TOKEN environment variable");
 
     // Create the client
     let client = Client::from_token(&token);
@@ -19,7 +19,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get account details
     let account_response = client.account_get().await?;
-    let account = account_response.into_inner().account.ok_or("No account found")?;
+    let account = account_response
+        .into_inner()
+        .account
+        .ok_or("No account found")?;
 
     println!("\n👤 Account Information:");
     println!("   Email: {}", account.email);
@@ -33,9 +36,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match client.balance_get().await {
         Ok(balance_response) => {
             let balance = balance_response.into_inner();
-            println!("   Current Balance: ${}", balance.account_balance.unwrap_or("N/A".to_string()));
-            println!("   Month-to-Date Balance: ${}", balance.month_to_date_balance.unwrap_or("N/A".to_string()));
-            println!("   Month-to-Date Usage: ${}", balance.month_to_date_usage.unwrap_or("N/A".to_string()));
+            println!(
+                "   Current Balance: ${}",
+                balance.account_balance.unwrap_or("N/A".to_string())
+            );
+            println!(
+                "   Month-to-Date Balance: ${}",
+                balance.month_to_date_balance.unwrap_or("N/A".to_string())
+            );
+            println!(
+                "   Month-to-Date Usage: ${}",
+                balance.month_to_date_usage.unwrap_or("N/A".to_string())
+            );
         }
         Err(e) => {
             println!("   ❌ Could not fetch balance: {}", e);
@@ -55,7 +67,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match client.droplets_list(None, None, None, None, None).await {
         Ok(droplets_response) => {
             let droplets = droplets_response.into_inner();
-            println!("   Droplets: {}/{}", droplets.droplets.len(), account.droplet_limit);
+            println!(
+                "   Droplets: {}/{}",
+                droplets.droplets.len(),
+                account.droplet_limit
+            );
         }
         Err(_) => println!("   Droplets: Unable to fetch"),
     }
@@ -64,7 +80,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match client.floating_i_ps_list(None, None).await {
         Ok(floating_ips_response) => {
             let floating_ips = floating_ips_response.into_inner();
-            println!("   Floating IPs: {}/{}", floating_ips.floating_ips.len(), account.floating_ip_limit);
+            println!(
+                "   Floating IPs: {}/{}",
+                floating_ips.floating_ips.len(),
+                account.floating_ip_limit
+            );
         }
         Err(_) => println!("   Floating IPs: Unable to fetch"),
     }
