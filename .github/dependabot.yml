@@ -1,16 +1,57 @@
 version: 2
 updates:
+  # Cargo dependencies
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "10:00"
+      timezone: "America/New_York"
     open-pull-requests-limit: 10
     reviewers:
-      - "your-username"  # Replace with actual username
+      - "blacksky-algorithms"
     assignees:
-      - "your-username"  # Replace with actual username
+      - "blacksky-algorithms"
     commit-message:
       prefix: "deps"
+      prefix-development: "deps(dev)"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "rust"
+    allow:
+      # Allow all dependency updates
+      - dependency-type: "all"
+    # Group minor and patch updates together to reduce PR volume
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:30"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "blacksky-algorithms"
+    assignees:
+      - "blacksky-algorithms"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

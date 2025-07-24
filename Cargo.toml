@@ -5,10 +5,11 @@ edition = "2021"
 authors = ["Clinton Bowen <clinton.bowen@gmail.com>"]
 description = "A Rust client library for the DigitalOcean API"
 license = "Apache-2.0"
-repository = "https://https://github.com/blacksky-algorithms/rsdo"
+repository = "https://github.com/blacksky-algorithms/rsdo"
 documentation = "https://docs.rs/rsdo"
 keywords = ["digitalocean", "api", "client", "async"]
 categories = ["api-bindings", "web-programming::http-client"]
+rust-version = "1.85.1"
 
 [dependencies]
 progenitor-client = "0.11.0"

@@ -11,6 +11,27 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  msrv:
+    name: Minimum Supported Rust Version (MSRV)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Rust MSRV
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.70.0  # Must match rust-version in Cargo.toml
+          
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Check MSRV
+        run: cargo check --all-targets --all-features
+        
+      - name: Test MSRV
+        run: cargo test --all-features
+
   check-style:
     name: Check Style
     runs-on: ubuntu-latest
@@ -152,8 +173,71 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
+      - name: Security audit
+        uses: rustsec/audit-check@v1.4.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run security audit
-        run: cargo audit
+  sbom:
+    name: Software Bill of Materials (SBOM)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx
+        
+      - name: Generate SBOM (JSON)
+        run: cargo cyclonedx --format json --output-file rsdo-sbom.json
+        
+      - name: Upload SBOM JSON artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsdo-sbom-json
+          path: rsdo-sbom.json
+          retention-days: 30
+          
+      - name: Generate SBOM (XML)
+        run: cargo cyclonedx --format xml --output-file rsdo-sbom.xml
+        
+      - name: Upload SBOM XML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsdo-sbom-xml
+          path: rsdo-sbom.xml
+          retention-days: 30
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+          
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+        
+      - name: Generate code coverage
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

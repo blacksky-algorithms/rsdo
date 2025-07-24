@@ -8,6 +8,9 @@
 [![Crates.io](https://img.shields.io/crates/v/rsdo.svg)](https://crates.io/crates/rsdo)
 [![Documentation](https://docs.rs/rsdo/badge.svg)](https://docs.rs/rsdo)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/blacksky-algorithms/rsdo/workflows/CI/badge.svg)](https://github.com/blacksky-algorithms/rsdo/actions/workflows/ci.yml)
+[![MSRV](https://img.shields.io/badge/MSRV-1.70.0-blue.svg)](https://github.com/blacksky-algorithms/rsdo#minimum-supported-rust-version-msrv)
+[![Codecov](https://codecov.io/gh/blacksky-algorithms/rsdo/branch/main/graph/badge.svg)](https://codecov.io/gh/blacksky-algorithms/rsdo)
 
 A comprehensive, type-safe Rust client for the DigitalOcean API, automatically generated from the official OpenAPI specification using [progenitor](https://github.com/oxidecomputer/progenitor).
 
@@ -360,6 +363,31 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 - **API Issues**: If you find issues with the generated client, please check if it's an upstream OpenAPI spec issue
 - **Documentation**: Help improve our examples and documentation
 - **Features**: Suggest new features or improvements
+
+## Minimum Supported Rust Version (MSRV)
+
+**Current MSRV**: `1.70.0`
+
+### MSRV Policy
+
+This crate follows an aggressive MSRV policy to take advantage of the latest Rust language features, performance improvements, and safety enhancements:
+
+- ✅ **MSRV can be raised at any time** for new features, safety improvements, or maintainability
+- ✅ **MSRV increases will result in a semver minor release** (not patch)
+- ✅ **We will always document MSRV changes** in release notes and changelog
+- ✅ **No advance warning period** - we adopt new language features as soon as they're beneficial
+
+### For Users
+
+- If you need to support older Rust versions, **pin to a specific version range** in your `Cargo.toml`:
+  ```toml
+  [dependencies]
+  rsdo = ">=1.0.0, <1.2.0"  # Example: avoid MSRV bumps in 1.2.0+
+  ```
+- Check the [`rust-version`](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) field in our `Cargo.toml` for the current MSRV
+- Our CI automatically tests against the declared MSRV to ensure compatibility
+
+This policy allows us to provide the safest, most performant, and maintainable DigitalOcean client possible by leveraging the latest Rust ecosystem improvements.
 
 ## API Reference
 

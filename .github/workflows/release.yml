@@ -343,3 +343,49 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  generate-sbom:
+    name: Generate and Attach SBOM
+    runs-on: ubuntu-latest
+    needs: check-and-release
+    if: needs.check-and-release.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-and-release.outputs.tag_name }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-sbom-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx
+
+      - name: Generate SBOM (JSON)
+        run: |
+          cargo cyclonedx --format json --output-file rsdo-sbom-${{ needs.check-and-release.outputs.version }}.json
+
+      - name: Generate SBOM (XML)
+        run: |
+          cargo cyclonedx --format xml --output-file rsdo-sbom-${{ needs.check-and-release.outputs.version }}.xml
+
+      - name: Upload SBOM files to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-and-release.outputs.tag_name }}
+          files: |
+            rsdo-sbom-${{ needs.check-and-release.outputs.version }}.json
+            rsdo-sbom-${{ needs.check-and-release.outputs.version }}.xml
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
