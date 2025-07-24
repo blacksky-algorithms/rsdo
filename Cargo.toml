@@ -11,7 +11,7 @@ keywords = ["digitalocean", "api", "client", "async"]
 categories = ["api-bindings", "web-programming::http-client"]
 
 [dependencies]
-progenitor-client = { path = "../progenitor/progenitor-client" }
+progenitor-client = "0.11.0"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -22,8 +22,8 @@ uuid = { version = "1.0", features = ["serde", "v4"] }
 thiserror = "1.0"
 
 [build-dependencies]
-progenitor = { path = "../progenitor/progenitor" }
-progenitor-impl = { path = "../progenitor/progenitor-impl" }
+progenitor = "0.11.0"
+progenitor-impl = "0.11.0"
 serde_json = "1.0"
 serde_yaml = "0.9"
 openapiv3 = "2.0"
