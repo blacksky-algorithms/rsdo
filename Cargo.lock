@@ -1362,7 +1362,7 @@ dependencies = [
 
 [[package]]
 name = "rsdo"
-version = "2025.7.25"
+version = "2025.7.26"
 dependencies = [
  "chrono",
  "futures",
