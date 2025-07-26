@@ -956,7 +956,7 @@ properties:
 
     fn apply_targeted_fixes(&self, value: &mut Value) -> Result<usize, Box<dyn std::error::Error>> {
         let mut fixes_count = 0;
-        
+
         match value {
             Value::Mapping(map) => {
                 // Fix description fields with known problematic content
@@ -964,15 +964,21 @@ properties:
                     if let Some(desc_str) = description.as_str() {
                         let mut fixed = desc_str.to_string();
                         let original = fixed.clone();
-                        
+
                         // Apply specific known fixes
-                        fixed = fixed.replace("https://github.com/google/re2/wiki/Syntax", "<https://github.com/google/re2/wiki/Syntax>");
-                        fixed = fixed.replace("https://www.digitalocean.com/legal/terms-of-service-agreement/", "<https://www.digitalocean.com/legal/terms-of-service-agreement/>");
+                        fixed = fixed.replace(
+                            "https://github.com/google/re2/wiki/Syntax",
+                            "<https://github.com/google/re2/wiki/Syntax>",
+                        );
+                        fixed = fixed.replace(
+                            "https://www.digitalocean.com/legal/terms-of-service-agreement/",
+                            "<https://www.digitalocean.com/legal/terms-of-service-agreement/>",
+                        );
                         fixed = fixed.replace("[V2]", r"\[V2\]");
                         fixed = fixed.replace("<host>", r"\<host\>");
                         fixed = fixed.replace("<port>", r"\<port\>");
                         fixed = fixed.replace("<resource>", r"\<resource\>");
-                        
+
                         // Fix code blocks - use text instead of ignore for non-Rust content
                         fixed = fixed.replace("```\nDD_KEY <%pri%>", "```text\nDD_KEY <%pri%>");
                         fixed = fixed.replace("```\ncurl ", "```text\ncurl ");
@@ -987,26 +993,32 @@ properties:
                         fixed = fixed.replace("```\nHTTP/", "```text\nHTTP/");
                         fixed = fixed.replace("```\nexport ", "```text\nexport ");
                         fixed = fixed.replace("```\n    . . .", "```text\n    . . .");
-                        fixed = fixed.replace("```\n429 Too Many Requests", "```text\n429 Too Many Requests");
-                        fixed = fixed.replace("```\n    429 Too Many Requests", "```text\n    429 Too Many Requests");
-                        
+                        fixed = fixed.replace(
+                            "```\n429 Too Many Requests",
+                            "```text\n429 Too Many Requests",
+                        );
+                        fixed = fixed.replace(
+                            "```\n    429 Too Many Requests",
+                            "```text\n    429 Too Many Requests",
+                        );
+
                         // Catch ALL remaining code blocks and mark them as text
                         // This is the safest approach since OpenAPI examples aren't meant to be Rust doctests
-                        
+
                         // First handle code blocks that start with just ```
                         let mut temp_fixed = fixed.clone();
                         let mut found_blocks = Vec::new();
-                        
+
                         // Find all code block starts
                         let mut pos = 0;
                         while let Some(start) = temp_fixed[pos..].find("```") {
                             let abs_pos = pos + start;
-                            
-                            // Look for the end of this line to see what language marker (if any) is there  
+
+                            // Look for the end of this line to see what language marker (if any) is there
                             if let Some(newline_pos) = temp_fixed[abs_pos..].find('\n') {
                                 let line_end = abs_pos + newline_pos;
                                 let code_block_start = &temp_fixed[abs_pos..line_end];
-                                
+
                                 // If it's just ``` or ```\s*, mark it for replacement
                                 if code_block_start.trim() == "```" {
                                     found_blocks.push(abs_pos);
@@ -1014,7 +1026,7 @@ properties:
                             }
                             pos = abs_pos + 3;
                         }
-                        
+
                         // Replace from the end to avoid position shifts
                         for &block_pos in found_blocks.iter().rev() {
                             if let Some(newline_pos) = temp_fixed[block_pos..].find('\n') {
@@ -1022,9 +1034,9 @@ properties:
                                 temp_fixed.replace_range(block_pos..end_pos, "```text");
                             }
                         }
-                        
+
                         fixed = temp_fixed;
-                        
+
                         // More comprehensive approach: look for any remaining code blocks that contain kubectl
                         // and mark them as text regardless of spacing
                         if fixed.contains("kubectl") {
@@ -1032,7 +1044,7 @@ properties:
                             let lines: Vec<&str> = fixed.split('\n').collect();
                             let mut new_lines = Vec::new();
                             let mut i = 0;
-                            
+
                             while i < lines.len() {
                                 let line = lines[i];
                                 if line.trim() == "```" && i + 1 < lines.len() {
@@ -1047,30 +1059,48 @@ properties:
                                 }
                                 i += 1;
                             }
-                            
+
                             fixed = new_lines.join("\n");
                         }
-                        
+
                         // Additional pattern to catch any remaining code blocks with the specific pattern
                         // that's still slipping through (indented kubectl with backslashes)
                         if fixed.contains("kubectl create secret generic docr") {
                             // The specific pattern that's slipping through has 4 spaces and backslashes
-                            fixed = fixed.replace("```\n    kubectl create secret generic docr \\", "```text\n    kubectl create secret generic docr \\");
-                            fixed = fixed.replace("```\n     kubectl create secret", "```text\n     kubectl create secret");
-                            fixed = fixed.replace("```\n      kubectl create secret", "```text\n      kubectl create secret");
-                            fixed = fixed.replace("```\n       kubectl create secret", "```text\n       kubectl create secret");
+                            fixed = fixed.replace(
+                                "```\n    kubectl create secret generic docr \\",
+                                "```text\n    kubectl create secret generic docr \\",
+                            );
+                            fixed = fixed.replace(
+                                "```\n     kubectl create secret",
+                                "```text\n     kubectl create secret",
+                            );
+                            fixed = fixed.replace(
+                                "```\n      kubectl create secret",
+                                "```text\n      kubectl create secret",
+                            );
+                            fixed = fixed.replace(
+                                "```\n       kubectl create secret",
+                                "```text\n       kubectl create secret",
+                            );
                         }
-                        
+
                         // Handle specific problematic patterns from the failed tests
                         if fixed.contains("HTTP/1.1 403 Forbidden") {
-                            fixed = fixed.replace("```\nHTTP/1.1 403 Forbidden", "```text\nHTTP/1.1 403 Forbidden");
+                            fixed = fixed.replace(
+                                "```\nHTTP/1.1 403 Forbidden",
+                                "```text\nHTTP/1.1 403 Forbidden",
+                            );
                         }
-                        
+
                         // Handle indented curl commands that start with spaces
                         if fixed.contains("curl -H \"Authorization:") {
-                            fixed = fixed.replace("```\n    curl -H \"Authorization:", "```text\n    curl -H \"Authorization:");
+                            fixed = fixed.replace(
+                                "```\n    curl -H \"Authorization:",
+                                "```text\n    curl -H \"Authorization:",
+                            );
                         }
-                        
+
                         if fixed != original {
                             *description = Value::String(fixed);
                             fixes_count += 1;
@@ -1083,12 +1113,12 @@ properties:
                     if let Some(example_str) = example.as_str() {
                         let mut fixed = example_str.to_string();
                         let original = fixed.clone();
-                        
+
                         // Escape problematic template characters
                         if fixed.contains("<%pri%>") || fixed.contains("DD_KEY") {
                             fixed = fixed.replace("<%", "\\<%").replace("%>", "%\\>");
                         }
-                        
+
                         if fixed != original {
                             *example = Value::String(fixed);
                             fixes_count += 1;
@@ -1108,10 +1138,9 @@ properties:
             }
             _ => {}
         }
-        
+
         Ok(fixes_count)
     }
-
 }
 
 fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Error>> {

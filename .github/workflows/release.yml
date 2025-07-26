@@ -44,64 +44,15 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+        run: .github/scripts/configure_git.sh
 
       - name: Generate version and tag
         id: version
-        run: |
-          # Generate date-based version (YYYY.M.D) - no leading zeros
-          YEAR=$(date +'%Y')
-          MONTH=$(date +'%-m')  # %-m removes leading zero
-          DAY=$(date +'%-d')    # %-d removes leading zero
-          DATE_VERSION="${YEAR}.${MONTH}.${DAY}"
-          TAG_NAME="v${DATE_VERSION}"
-          
-          echo "VERSION=${DATE_VERSION}" >> $GITHUB_OUTPUT
-          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
-          echo "Generated version: ${DATE_VERSION}"
-          echo "Tag name: ${TAG_NAME}"
+        run: .github/scripts/generate_version.sh
 
       - name: Check if should create release
         id: check
-        run: |
-          TAG_NAME="${{ steps.version.outputs.TAG_NAME }}"
-          FORCE="${{ github.event.inputs.force }}"
-          TRIGGER_TYPE="${{ github.event_name }}"
-          
-          echo "Trigger type: ${TRIGGER_TYPE}"
-          
-          # Check if tag already exists
-          if git tag -l | grep -q "^${TAG_NAME}$"; then
-            if [ "$FORCE" = "true" ]; then
-              echo "Tag ${TAG_NAME} exists but force=true, proceeding with release"
-              echo "should_release=true" >> $GITHUB_OUTPUT
-            elif [ "$TRIGGER_TYPE" = "schedule" ]; then
-              echo "Tag ${TAG_NAME} exists but this is a scheduled run, skipping to avoid duplicate monthly releases"
-              echo "should_release=false" >> $GITHUB_OUTPUT
-            else
-              echo "Tag ${TAG_NAME} already exists and force=false. Skipping release."
-              echo "should_release=false" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "Tag ${TAG_NAME} does not exist, proceeding with release"
-            echo "should_release=true" >> $GITHUB_OUTPUT
-          fi
-          
-          # Log the decision
-          if [ "$(cat $GITHUB_OUTPUT | grep should_release=true)" ]; then
-            echo "✅ Will create release for ${TAG_NAME}"
-            if [ "$TRIGGER_TYPE" = "schedule" ]; then
-              echo "📅 Scheduled monthly release"
-            elif [ "$TRIGGER_TYPE" = "workflow_dispatch" ]; then
-              echo "🔧 Manual release trigger"
-            elif [ "$TRIGGER_TYPE" = "push" ]; then
-              echo "🚀 Automatic release on push to main"
-            fi
-          else
-            echo "⏭️ Skipping release creation"
-          fi
+        run: .github/scripts/check_release.sh "${{ steps.version.outputs.TAG_NAME }}" "${{ github.event.inputs.force }}" "${{ github.event_name }}"
 
       - name: Install Rust stable
         if: steps.check.outputs.should_release == 'true'
@@ -119,130 +70,30 @@ jobs:
 
       - name: Update Cargo.toml version
         if: steps.check.outputs.should_release == 'true'
-        run: |
-          DATE_VERSION="${{ steps.version.outputs.VERSION }}"
-          
-          # Update version in Cargo.toml
-          sed -i "s/^version = \".*\"/version = \"${DATE_VERSION}\"/" Cargo.toml
-          
-          # Verify the change
-          echo "Updated Cargo.toml version:"
-          grep "^version =" Cargo.toml
+        run: .github/scripts/update_cargo_version.sh "${{ steps.version.outputs.VERSION }}"
 
       - name: Update Cargo.lock
         if: steps.check.outputs.should_release == 'true'
-        run: |
-          cargo check --locked || cargo update
+        run: .github/scripts/update_cargo_lock.sh
 
       - name: Build and test
         if: steps.check.outputs.should_release == 'true'
-        run: |
-          cargo build --locked --release
-          cargo test --locked --release
+        run: .github/scripts/build_and_test.sh
 
       - name: Commit version changes and create tag
         if: steps.check.outputs.should_release == 'true'
-        run: |
-          TAG_NAME="${{ steps.version.outputs.TAG_NAME }}"
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          TRIGGER_TYPE="${{ github.event_name }}"
-          
-          # Create appropriate commit message based on trigger
-          if [ "$TRIGGER_TYPE" = "schedule" ]; then
-            COMMIT_MSG="chore: monthly release v${VERSION}"
-            TAG_MSG="Monthly release ${TAG_NAME}"
-          elif [ "$TRIGGER_TYPE" = "workflow_dispatch" ]; then
-            COMMIT_MSG="chore: manual release v${VERSION}"
-            TAG_MSG="Manual release ${TAG_NAME}"
-          else
-            COMMIT_MSG="chore: release v${VERSION}"
-            TAG_MSG="Release ${TAG_NAME}"
-          fi
-          
-          # Commit version changes
-          git add Cargo.toml Cargo.lock
-          git commit -m "${COMMIT_MSG}"
-          
-          # Delete existing tag if it exists (for force mode)
-          if git tag -l | grep -q "^${TAG_NAME}$"; then
-            echo "Deleting existing tag ${TAG_NAME}"
-            git tag -d "${TAG_NAME}"
-            # Delete remote tag, ignore if it doesn't exist
-            git push origin ":refs/tags/${TAG_NAME}" 2>/dev/null || echo "Remote tag ${TAG_NAME} doesn't exist or already deleted"
-          fi
-          
-          # Create new tag
-          git tag -a "${TAG_NAME}" -m "${TAG_MSG}"
-          
-          # Push changes and tag with error handling
-          echo "Pushing commit to main branch..."
-          git push origin main
-          
-          echo "Pushing tag ${TAG_NAME}..."
-          git push origin "${TAG_NAME}"
-          
-          echo "✅ Successfully pushed commit and tag"
+        run: .github/scripts/commit_and_tag.sh "${{ steps.version.outputs.TAG_NAME }}" "${{ steps.version.outputs.VERSION }}" "${{ github.event_name }}"
 
       - name: Generate changelog
         if: steps.check.outputs.should_release == 'true'
         id: changelog
-        run: |
-          # Make changelog script executable
-          chmod +x .github/scripts/changelog.sh
-          
-          # Generate changelog content using script
-          CHANGELOG=$(.github/scripts/changelog.sh \
-            "${{ steps.version.outputs.VERSION }}" \
-            "${{ steps.version.outputs.TAG_NAME }}" \
-            "${{ github.event_name }}" \
-            "${{ github.repository }}")
-          
-          # Output for GitHub Actions (handle multiline)
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
-          echo "Generated changelog for ${{ steps.version.outputs.TAG_NAME }}"
+        run: .github/scripts/generate_changelog.sh "${{ steps.version.outputs.VERSION }}" "${{ steps.version.outputs.TAG_NAME }}" "${{ github.event_name }}" "${{ github.repository }}"
 
       - name: Create GitHub Release
         if: steps.check.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG_NAME="${{ steps.version.outputs.TAG_NAME }}"
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          TRIGGER_TYPE="${{ github.event_name }}"
-          
-          # Determine release title based on trigger
-          if [ "$TRIGGER_TYPE" = "schedule" ]; then
-            RELEASE_TITLE="📅 Monthly Release ${TAG_NAME}"
-          elif [ "$TRIGGER_TYPE" = "workflow_dispatch" ]; then
-            RELEASE_TITLE="🔧 Manual Release ${TAG_NAME}"
-          else
-            RELEASE_TITLE="🚀 Release ${TAG_NAME}"
-          fi
-          
-          # Check if we should use auto-generated notes or custom changelog
-          USE_AUTO_NOTES="${{ vars.USE_AUTO_GENERATED_NOTES || 'false' }}"
-          
-          if [ "$USE_AUTO_NOTES" = "true" ]; then
-            echo "Creating release with auto-generated notes..."
-            gh release create "${TAG_NAME}" \
-              --title "${RELEASE_TITLE}" \
-              --generate-notes \
-              --latest
-          else
-            echo "Creating release with custom changelog..."
-            # Save changelog to temporary file
-            echo '${{ steps.changelog.outputs.CHANGELOG }}' > /tmp/changelog.md
-            
-            gh release create "${TAG_NAME}" \
-              --title "${RELEASE_TITLE}" \
-              --notes-file /tmp/changelog.md \
-              --latest
-          fi
-          
-          echo "✅ Created GitHub release: ${TAG_NAME}"
+        run: .github/scripts/create_github_release.sh "${{ steps.version.outputs.TAG_NAME }}" "${{ steps.version.outputs.VERSION }}" "${{ github.event_name }}" "${{ steps.changelog.outputs.CHANGELOG }}" "${{ vars.USE_AUTO_GENERATED_NOTES || 'false' }}"
 
   publish-crate:
     name: Publish to crates.io
@@ -323,17 +174,7 @@ jobs:
         run: cargo build --locked --release --target ${{ matrix.target }}
 
       - name: Prepare binary for upload
-        run: |
-          # Verify binary exists and is executable
-          BINARY_PATH="target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
-          if [ ! -f "$BINARY_PATH" ]; then
-            echo "❌ Binary not found at $BINARY_PATH"
-            exit 1
-          fi
-          
-          # Get binary size for logging
-          BINARY_SIZE=$(stat -c%s "$BINARY_PATH" 2>/dev/null || stat -f%z "$BINARY_PATH" 2>/dev/null || echo "unknown")
-          echo "📦 Binary ready: $BINARY_PATH (${BINARY_SIZE} bytes)"
+        run: .github/scripts/prepare_binary.sh "${{ matrix.target }}" "${{ matrix.artifact_name }}"
 
       - name: Upload binary to release
         uses: softprops/action-gh-release@v2
@@ -371,13 +212,8 @@ jobs:
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx
 
-      - name: Generate SBOM (JSON)
-        run: |
-          cargo cyclonedx --format json --override-filename rsdo-sbom-${{ needs.check-and-release.outputs.version }}.json
-
-      - name: Generate SBOM (XML)
-        run: |
-          cargo cyclonedx --format xml --override-filename rsdo-sbom-${{ needs.check-and-release.outputs.version }}.xml
+      - name: Generate SBOM files
+        run: .github/scripts/generate_sbom.sh "${{ needs.check-and-release.outputs.version }}"
 
       - name: Upload SBOM files to release
         uses: softprops/action-gh-release@v2

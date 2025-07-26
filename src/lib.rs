@@ -55,9 +55,15 @@ pub struct Client;
 
 #[cfg(doctest)]
 impl Client {
-    pub fn from_token(_token: &str) -> Self { Self }
-    pub fn with_client(_token: &str, _client: reqwest::Client) -> Self { Self }
-    pub fn baseurl(&self) -> &str { "https://api.digitalocean.com" }
+    pub fn from_token(_token: &str) -> Self {
+        Self
+    }
+    pub fn with_client(_token: &str, _client: reqwest::Client) -> Self {
+        Self
+    }
+    pub fn baseurl(&self) -> &str {
+        "https://api.digitalocean.com"
+    }
 }
 
 #[cfg(not(doctest))]
