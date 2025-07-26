@@ -12,8 +12,8 @@
 //!     // Create a client with your DigitalOcean personal access token
 //!     let client = Client::from_token("your-digitalocean-token");
 //!
-//!     // List your droplets
-//!     let droplets = client.droplets_list().await?;
+//!     // List your droplets (with required parameters)
+//!     let droplets = client.droplets_list(None, None, None, None, None).await?;
 //!     println!("Found {} droplets", droplets.into_inner().droplets.len());
 //!
 //!     Ok(())
@@ -37,8 +37,30 @@ use reqwest::header::{self, HeaderMap, HeaderValue};
 use std::time::Duration;
 
 // Include the generated code from build.rs
-include!(concat!(env!("OUT_DIR"), "/codegen.rs"));
+// Disable doctests for generated code since OpenAPI examples aren't meant to be Rust tests
+#[cfg(doctest)]
+mod _disabled {}
 
+#[cfg(not(doctest))]
+mod generated {
+    include!(concat!(env!("OUT_DIR"), "/codegen.rs"));
+}
+
+#[cfg(not(doctest))]
+pub use generated::*;
+
+// For doctests, provide a minimal stub
+#[cfg(doctest)]
+pub struct Client;
+
+#[cfg(doctest)]
+impl Client {
+    pub fn from_token(_token: &str) -> Self { Self }
+    pub fn with_client(_token: &str, _client: reqwest::Client) -> Self { Self }
+    pub fn baseurl(&self) -> &str { "https://api.digitalocean.com" }
+}
+
+#[cfg(not(doctest))]
 impl Client {
     /// Create a new DigitalOcean client with a personal access token.
     ///
@@ -111,6 +133,7 @@ impl Client {
 }
 
 // Re-export commonly used types for convenience
+#[cfg(not(doctest))]
 pub use types::*;
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 [package]
 name = "rsdo"
-version = "2025.7.23"
+version = "2025.7.25"
 edition = "2021"
 authors = ["Clinton Bowen <clinton.bowen@gmail.com>"]
 description = "A Rust client library for the DigitalOcean API"
@@ -10,6 +10,11 @@ documentation = "https://docs.rs/rsdo"
 keywords = ["digitalocean", "api", "client", "async"]
 categories = ["api-bindings", "web-programming::http-client"]
 rust-version = "1.85.1"
+
+[package.metadata.docs.rs]
+# Configure docs.rs to use all features and build the documentation robustly
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 progenitor-client = "0.11.0"

@@ -21,7 +21,7 @@ jobs:
       - name: Install Rust MSRV
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.70.0  # Must match rust-version in Cargo.toml
+          toolchain: 1.85.1  # Must match rust-version in Cargo.toml
           
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
