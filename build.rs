@@ -1312,12 +1312,13 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
 #[allow(missing_copy_implementations)]
 #[allow(trivial_casts)]
 #[allow(trivial_numeric_casts)]
+#[allow(unknown_lints)]
 #[allow(unsafe_code)]
 #[allow(unstable_features)]
 #[allow(unused_import_braces)]
 #[allow(unused_qualifications)]
 #[allow(renamed_and_removed_lints)]
-#[allow(elided_named_lifetimes)]
+#[allow(mismatched_lifetime_syntaxes)
 
 "#;
 
