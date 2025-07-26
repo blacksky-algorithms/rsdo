@@ -1318,7 +1318,7 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
 #[allow(unused_import_braces)]
 #[allow(unused_qualifications)]
 #[allow(renamed_and_removed_lints)]
-#[allow(mismatched_lifetime_syntaxes)
+#[allow(mismatched_lifetime_syntaxes)]
 
 "#;
 
