@@ -9,7 +9,7 @@ repository = "https://github.com/blacksky-algorithms/rsdo"
 documentation = "https://docs.rs/rsdo"
 keywords = ["digitalocean", "api", "client", "async"]
 categories = ["api-bindings", "web-programming::http-client"]
-rust-version = "1.85.1"
+rust-version = "1.88.0"
 
 [package.metadata.docs.rs]
 # Configure docs.rs to use all features and build the documentation robustly
