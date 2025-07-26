@@ -987,7 +987,11 @@ properties:
                         fixed = fixed.replace("```\n    curl ", "```text\n    curl ");
                         // Handle kubectl commands with various indentation levels
                         for spaces in 0..=8 {
-                            let indent = if spaces == 0 { String::new() } else { " ".repeat(spaces) };
+                            let indent = if spaces == 0 {
+                                String::new()
+                            } else {
+                                " ".repeat(spaces)
+                            };
                             fixed = fixed.replace(
                                 &format!("```\n{}kubectl ", indent),
                                 &format!("```text\n{}kubectl ", indent),
@@ -1074,7 +1078,10 @@ properties:
                                 let indent = " ".repeat(spaces);
                                 fixed = fixed.replace(
                                     &format!("```\n{}kubectl create secret generic docr", indent),
-                                    &format!("```text\n{}kubectl create secret generic docr", indent),
+                                    &format!(
+                                        "```text\n{}kubectl create secret generic docr",
+                                        indent
+                                    ),
                                 );
                                 fixed = fixed.replace(
                                     &format!("```\n{}kubectl create secret", indent),
@@ -1082,7 +1089,7 @@ properties:
                                 );
                             }
                         }
-                        
+
                         // Handle indented kubectl commands that aren't in explicit code blocks
                         // These appear as plain indented text but get treated as Rust code examples
                         if fixed.contains("kubectl create secret generic docr") {
@@ -1091,19 +1098,26 @@ properties:
                             let mut new_lines = Vec::new();
                             let mut in_kubectl_block = false;
                             let mut kubectl_lines = Vec::new();
-                            
+
                             for line in lines {
                                 // Detect start of kubectl command block (indented kubectl line)
-                                if line.trim_start().starts_with("kubectl create secret generic docr") && line.starts_with("    ") {
+                                if line
+                                    .trim_start()
+                                    .starts_with("kubectl create secret generic docr")
+                                    && line.starts_with("    ")
+                                {
                                     in_kubectl_block = true;
                                     kubectl_lines.clear();
                                     kubectl_lines.push(line);
                                 } else if in_kubectl_block {
                                     // Continue collecting kubectl-related lines
-                                    if line.trim().is_empty() || 
-                                       (line.starts_with("      ") && (line.contains("--from-file") || line.contains("--type"))) {
+                                    if line.trim().is_empty()
+                                        || (line.starts_with("      ")
+                                            && (line.contains("--from-file")
+                                                || line.contains("--type")))
+                                    {
                                         kubectl_lines.push(line);
-                                        
+
                                         // If this line doesn't end with \, it's the end of the command
                                         if !line.trim().ends_with('\\') && !line.trim().is_empty() {
                                             // Convert the collected kubectl lines to a proper text code block
@@ -1133,7 +1147,7 @@ properties:
                                     new_lines.push(line);
                                 }
                             }
-                            
+
                             // Handle any remaining kubectl lines
                             if !kubectl_lines.is_empty() {
                                 new_lines.push("```text");
@@ -1142,7 +1156,7 @@ properties:
                                 }
                                 new_lines.push("```");
                             }
-                            
+
                             fixed = new_lines.join("\n");
                         }
 
@@ -1304,17 +1318,16 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
 #[allow(unused_qualifications)]
 #[allow(renamed_and_removed_lints)]
 #[allow(elided_named_lifetimes)]
-#[allow(mismatched_lifetime_syntaxes)]
 
 "#;
 
     // Prepend the lint suppressions to the generated code
     code = format!("{}{}", lint_suppressions, code);
-    
+
     // Fix renamed lint warnings in progenitor-generated code
     code = code.replace(
         "#[allow(elided_named_lifetimes)]",
-        "#[allow(mismatched_lifetime_syntaxes)]"
+        "#[allow(mismatched_lifetime_syntaxes)]",
     );
 
     println!(
