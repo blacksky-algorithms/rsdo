@@ -985,11 +985,14 @@ properties:
                         fixed = fixed.replace("```\n     curl ", "```text\n     curl ");
                         fixed = fixed.replace("```\n      curl ", "```text\n      curl ");
                         fixed = fixed.replace("```\n    curl ", "```text\n    curl ");
-                        fixed = fixed.replace("```\nkubectl ", "```text\nkubectl ");
-                        fixed = fixed.replace("```\n    kubectl ", "```text\n    kubectl ");
-                        fixed = fixed.replace("```\n  kubectl ", "```text\n  kubectl ");
-                        fixed = fixed.replace("```\n     kubectl ", "```text\n     kubectl ");
-                        fixed = fixed.replace("```\n      kubectl ", "```text\n      kubectl ");
+                        // Handle kubectl commands with various indentation levels
+                        for spaces in 0..=8 {
+                            let indent = if spaces == 0 { String::new() } else { " ".repeat(spaces) };
+                            fixed = fixed.replace(
+                                &format!("```\n{}kubectl ", indent),
+                                &format!("```text\n{}kubectl ", indent),
+                            );
+                        }
                         fixed = fixed.replace("```\nHTTP/", "```text\nHTTP/");
                         fixed = fixed.replace("```\nexport ", "```text\nexport ");
                         fixed = fixed.replace("```\n    . . .", "```text\n    . . .");
@@ -1066,23 +1069,81 @@ properties:
                         // Additional pattern to catch any remaining code blocks with the specific pattern
                         // that's still slipping through (indented kubectl with backslashes)
                         if fixed.contains("kubectl create secret generic docr") {
-                            // The specific pattern that's slipping through has 4 spaces and backslashes
-                            fixed = fixed.replace(
-                                "```\n    kubectl create secret generic docr \\",
-                                "```text\n    kubectl create secret generic docr \\",
-                            );
-                            fixed = fixed.replace(
-                                "```\n     kubectl create secret",
-                                "```text\n     kubectl create secret",
-                            );
-                            fixed = fixed.replace(
-                                "```\n      kubectl create secret",
-                                "```text\n      kubectl create secret",
-                            );
-                            fixed = fixed.replace(
-                                "```\n       kubectl create secret",
-                                "```text\n       kubectl create secret",
-                            );
+                            // Handle various indentation levels for kubectl commands
+                            for spaces in [2, 3, 4, 5, 6, 7, 8] {
+                                let indent = " ".repeat(spaces);
+                                fixed = fixed.replace(
+                                    &format!("```\n{}kubectl create secret generic docr", indent),
+                                    &format!("```text\n{}kubectl create secret generic docr", indent),
+                                );
+                                fixed = fixed.replace(
+                                    &format!("```\n{}kubectl create secret", indent),
+                                    &format!("```text\n{}kubectl create secret", indent),
+                                );
+                            }
+                        }
+                        
+                        // Handle indented kubectl commands that aren't in explicit code blocks
+                        // These appear as plain indented text but get treated as Rust code examples
+                        if fixed.contains("kubectl create secret generic docr") {
+                            // Look for lines that start with whitespace followed by kubectl
+                            let lines: Vec<&str> = fixed.split('\n').collect();
+                            let mut new_lines = Vec::new();
+                            let mut in_kubectl_block = false;
+                            let mut kubectl_lines = Vec::new();
+                            
+                            for line in lines {
+                                // Detect start of kubectl command block (indented kubectl line)
+                                if line.trim_start().starts_with("kubectl create secret generic docr") && line.starts_with("    ") {
+                                    in_kubectl_block = true;
+                                    kubectl_lines.clear();
+                                    kubectl_lines.push(line);
+                                } else if in_kubectl_block {
+                                    // Continue collecting kubectl-related lines
+                                    if line.trim().is_empty() || 
+                                       (line.starts_with("      ") && (line.contains("--from-file") || line.contains("--type"))) {
+                                        kubectl_lines.push(line);
+                                        
+                                        // If this line doesn't end with \, it's the end of the command
+                                        if !line.trim().ends_with('\\') && !line.trim().is_empty() {
+                                            // Convert the collected kubectl lines to a proper text code block
+                                            new_lines.push("```text");
+                                            for kubectl_line in &kubectl_lines {
+                                                new_lines.push(kubectl_line);
+                                            }
+                                            new_lines.push("```");
+                                            in_kubectl_block = false;
+                                            kubectl_lines.clear();
+                                            continue;
+                                        }
+                                    } else {
+                                        // End of kubectl block, flush what we have
+                                        if !kubectl_lines.is_empty() {
+                                            new_lines.push("```text");
+                                            for kubectl_line in &kubectl_lines {
+                                                new_lines.push(kubectl_line);
+                                            }
+                                            new_lines.push("```");
+                                            kubectl_lines.clear();
+                                        }
+                                        in_kubectl_block = false;
+                                        new_lines.push(line);
+                                    }
+                                } else {
+                                    new_lines.push(line);
+                                }
+                            }
+                            
+                            // Handle any remaining kubectl lines
+                            if !kubectl_lines.is_empty() {
+                                new_lines.push("```text");
+                                for kubectl_line in &kubectl_lines {
+                                    new_lines.push(kubectl_line);
+                                }
+                                new_lines.push("```");
+                            }
+                            
+                            fixed = new_lines.join("\n");
                         }
 
                         // Handle specific problematic patterns from the failed tests
@@ -1220,10 +1281,44 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
     };
 
     println!("Converting syntax tree to formatted code...");
-    let code = prettyplease::unparse(&syntax_tree);
+    let mut code = prettyplease::unparse(&syntax_tree);
+
+    // Add comprehensive lint suppressions at the top for generated code
+    let lint_suppressions = r#"// Generated code - comprehensive lint suppressions
+#[allow(warnings)]
+#[allow(clippy::all)]
+#[allow(rustdoc::all)]
+#[allow(unused)]
+#[allow(dead_code)]
+#[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+#[allow(missing_docs)]
+#[allow(missing_debug_implementations)]
+#[allow(missing_copy_implementations)]
+#[allow(trivial_casts)]
+#[allow(trivial_numeric_casts)]
+#[allow(unsafe_code)]
+#[allow(unstable_features)]
+#[allow(unused_import_braces)]
+#[allow(unused_qualifications)]
+#[allow(renamed_and_removed_lints)]
+#[allow(elided_named_lifetimes)]
+#[allow(mismatched_lifetime_syntaxes)]
+
+"#;
+
+    // Prepend the lint suppressions to the generated code
+    code = format!("{}{}", lint_suppressions, code);
+    
+    // Fix renamed lint warnings in progenitor-generated code
+    code = code.replace(
+        "#[allow(elided_named_lifetimes)]",
+        "#[allow(mismatched_lifetime_syntaxes)]"
+    );
 
     println!(
-        "Successfully generated {} characters of Rust client code",
+        "Successfully generated {} characters of Rust client code (with lint suppressions)",
         code.len()
     );
     Ok(code)
