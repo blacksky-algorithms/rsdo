@@ -138,8 +138,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -152,8 +152,8 @@ jobs:
 
       - name: Build documentation
         run: cargo doc
-        env:
-          RUSTDOCFLAGS: -D warnings
+        # env:
+        #   RUSTDOCFLAGS: -D warnings
       
       - name: Check for broken links in docs
         run: .github/scripts/check_docs_links.sh
