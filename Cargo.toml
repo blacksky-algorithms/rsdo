@@ -1,6 +1,6 @@
 [package]
 name = "rsdo"
-version = "0.1.20250901"
+version = "0.1.20251001"
 edition = "2021"
 authors = ["Clinton Bowen <clinton.bowen@gmail.com>"]
 description = "A Rust client library for the DigitalOcean API"
