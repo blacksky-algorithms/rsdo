@@ -6,7 +6,7 @@ generate_sbom() {
     local VERSION="$1"
     local FORMAT="$2"
     
-    cargo cyclonedx --format "$FORMAT" --override-filename "rsdo-sbom-${VERSION}.${FORMAT}"
+    cargo cyclonedx --format "$FORMAT" --override-filename "rsdo-sbom-${VERSION}"
 }
 
 # Function to generate both JSON and XML SBOM files
