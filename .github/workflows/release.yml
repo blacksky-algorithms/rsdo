@@ -255,15 +255,15 @@ jobs:
         run: cargo install cargo-cyclonedx
 
       - name: Generate SBOM files
-        run: .github/scripts/generate_sbom.sh "${{ needs.check-and-release.outputs.version }}"
+        run: .github/scripts/generate_sbom.sh
 
       - name: Upload SBOM files to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-and-release.outputs.tag_name }}
           files: |
-            rsdo-sbom-${{ needs.check-and-release.outputs.version }}.json
-            rsdo-sbom-${{ needs.check-and-release.outputs.version }}.xml
+            rsdo-sbom.json
+            rsdo-sbom.xml
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
