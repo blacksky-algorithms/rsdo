@@ -1,3 +1,46 @@
+//! # DigitalOcean OpenAPI Client Generator
+//!
+//! This build script generates a type-safe Rust client for the DigitalOcean API by processing
+//! their OpenAPI specification. The generation process involves four complex stages:
+//!
+//! ## 1. Download & Extract (download_openapi_spec)
+//! Downloads the latest OpenAPI spec from GitHub and extracts it to the build output directory.
+//!
+//! ## 2. YAML Reference Resolution (RefResolver)
+//! The DigitalOcean OpenAPI spec is split across 100+ YAML files with references like:
+//! - `$ref: "#/definitions/droplet"` (internal references within a file)
+//! - `$ref: "shared/droplet.yml#/properties/id"` (external file references)
+//! - `$ref: "../../../shared/attributes.yml"` (relative paths that may be incorrect)
+//!
+//! This stage recursively resolves all references into a single, self-contained spec.
+//!
+//! ## 3. Specification Fixups
+//! The DigitalOcean spec has several issues that prevent successful code generation:
+//!
+//! ### a) Missing Definitions (add_missing_definitions)
+//! Common types referenced but not defined (pagination links, K8s taints, etc.)
+//!
+//! ### b) Unresolved References (clean_unresolved_refs)
+//! References that couldn't be resolved are replaced with fallback schemas.
+//!
+//! ### c) Documentation Sanitization (sanitize_documentation)
+//! **CRITICAL FOR DOCTESTS**: OpenAPI descriptions contain shell commands, kubectl examples,
+//! and HTTP responses that Rust's documentation system tries to compile as Rust code.
+//! This causes doctest failures. We mark all non-Rust code blocks as ```text```.
+//!
+//! ### d) Response Type Deduplication (deduplicate_response_types)
+//! **CRITICAL FOR PROGENITOR**: Progenitor 0.11.0 has an assertion that fails when an API
+//! operation has multiple success responses (e.g., 200, 201, 204). We simplify each operation
+//! to have only one response to avoid this limitation.
+//!
+//! ## 4. Code Generation (generate_client_code)
+//! Uses the progenitor library to generate Rust code from the processed OpenAPI spec.
+//! The workflow: YAML → JSON → OpenAPI struct → proc-macro tokens → syn AST → formatted code
+//!
+//! ## Fallback Strategy
+//! If any stage fails, a minimal stub client is generated instead of failing the build.
+//! This allows the crate to compile even if the OpenAPI spec is temporarily unavailable.
+
 use serde_yaml::Value;
 use std::{
     collections::HashMap,
@@ -5,6 +48,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Build script entry point: orchestrates the client generation pipeline.
+///
+/// ## Process Flow:
+/// 1. Download OpenAPI spec from GitHub (if not already cached)
+/// 2. Process spec with full reference resolution and fixups
+/// 3. Generate Rust client code using progenitor
+/// 4. Write generated code to OUT_DIR/codegen.rs
+///
+/// ## Error Handling:
+/// If any stage fails, writes a fallback stub client instead of failing the build.
+/// This ensures the crate can still compile, though with limited functionality.
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let spec_dir = Path::new(&out_dir).join("digitalocean-openapi");
@@ -55,6 +109,30 @@ fn main() {
     }
 }
 
+/// Downloads and extracts the latest DigitalOcean OpenAPI specification from GitHub.
+///
+/// ## Source
+/// Downloads from: https://github.com/digitalocean/openapi (main branch)
+///
+/// ## Process:
+/// 1. Downloads ZIP archive of the entire repo
+/// 2. Extracts all files to `spec_dir`
+/// 3. Strips the "openapi-main/" prefix from paths (GitHub ZIP artifact)
+///
+/// ## File Structure:
+/// After extraction, the spec is located at:
+/// ```text
+/// spec_dir/
+///   specification/
+///     DigitalOcean-public.v2.yaml  (main spec file)
+///     description.yml
+///     resources/                    (100+ YAML files)
+///     shared/                       (common definitions)
+/// ```
+///
+/// ## Caching:
+/// This function is only called if `spec_dir` doesn't exist, so the spec is
+/// downloaded once per clean build.
 fn download_openapi_spec(spec_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     println!("Downloading DigitalOcean OpenAPI specification...");
 
@@ -93,6 +171,18 @@ fn download_openapi_spec(spec_dir: &Path) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
+/// Processes the OpenAPI specification by resolving all YAML references.
+///
+/// This is the entry point for the reference resolution pipeline. It creates
+/// a `RefResolver` and runs the complete resolution process.
+///
+/// ## Input:
+/// - `spec_path`: Path to DigitalOcean-public.v2.yaml
+///
+/// ## Output:
+/// - A single, self-contained YAML Value with all references resolved
+///
+/// See `RefResolver::resolve_refs` for details on the multi-stage resolution process.
 fn process_openapi_spec(spec_path: &Path) -> Result<Value, Box<dyn std::error::Error>> {
     println!("Processing OpenAPI specification with reference resolution...");
 
@@ -106,6 +196,43 @@ fn process_openapi_spec(spec_path: &Path) -> Result<Value, Box<dyn std::error::E
     Ok(resolved_spec)
 }
 
+/// Resolves OpenAPI `$ref` directives across multiple YAML files.
+///
+/// ## The Problem
+/// The DigitalOcean OpenAPI spec uses `$ref` extensively to reference definitions
+/// across 100+ separate YAML files. References can be:
+///
+/// 1. **Internal** (within the same file):
+///    ```yaml
+///    $ref: "#/definitions/droplet"
+///    ```
+///
+/// 2. **External** (to another file):
+///    ```yaml
+///    $ref: "shared/droplet.yml#/properties/id"
+///    ```
+///
+/// 3. **Relative** (with complex paths):
+///    ```yaml
+///    $ref: "../../../shared/attributes/tags.yml"
+///    ```
+///
+/// These must all be resolved to actual schema definitions for progenitor to work.
+///
+/// ## How It Works
+/// - Traverses the entire YAML tree recursively
+/// - Whenever it finds a `$ref` key, it:
+///   1. Loads the referenced file (if external)
+///   2. Navigates to the specific path using JSON Pointer (RFC 6901)
+///   3. Replaces the `$ref` with the actual definition
+/// - Uses caching to avoid re-loading files
+/// - Detects circular references to prevent infinite loops
+///
+/// ## Fields
+/// - `spec_dir`: Base directory containing the specification files
+/// - `cache`: Loaded YAML files (path → parsed Value) to avoid re-reading
+/// - `resolving`: Set of files currently being resolved (for cycle detection)
+/// - `root_spec`: The main specification, used for resolving internal refs
 struct RefResolver {
     spec_dir: PathBuf,
     cache: HashMap<PathBuf, Value>,
@@ -123,6 +250,12 @@ impl RefResolver {
         }
     }
 
+    /// Loads and parses a YAML file, with caching and error handling.
+    ///
+    /// ## Special Handling:
+    /// - Caches parsed files to avoid re-loading
+    /// - Fixes the integer `18446744073709552000` which is out of i64 range
+    ///   (found in some DigitalOcean specs) by replacing it with i64::MAX
     fn load_yaml_file(&mut self, path: &Path) -> Result<Value, Box<dyn std::error::Error>> {
         if let Some(cached) = self.cache.get(path) {
             return Ok(cached.clone());
@@ -152,6 +285,39 @@ impl RefResolver {
         Ok(value)
     }
 
+    /// Main entry point for the multi-stage reference resolution and fixup process.
+    ///
+    /// ## Pipeline:
+    ///
+    /// ### Stage 1: Add Missing Definitions
+    /// Injects commonly-referenced but missing type definitions (pagination links,
+    /// tags arrays, K8s node taints, etc.) into the spec.
+    ///
+    /// ### Stage 2: Multi-Pass Reference Resolution (3 passes)
+    /// Resolves `$ref` directives. Multiple passes are needed because:
+    /// - Pass 1: Resolves external file references
+    /// - Pass 2: Resolves newly-exposed internal references from Pass 1
+    /// - Pass 3: Catches any remaining nested references
+    ///
+    /// ### Stage 3: Clean Unresolved References
+    /// Any `$ref` that couldn't be resolved (broken links, missing files) gets
+    /// replaced with a generic fallback schema to prevent build failures.
+    ///
+    /// ### Stage 4: Sanitize Documentation
+    /// Fixes doctest issues by marking non-Rust code blocks as ```text```.
+    /// This prevents Rust's doc system from trying to compile kubectl commands,
+    /// curl examples, and HTTP responses as Rust code.
+    ///
+    /// ### Stage 5: Deduplicate Response Types
+    /// **CRITICAL**: Progenitor 0.11.0 asserts that each operation has only one
+    /// successful response type. Operations with multiple 2xx responses (e.g.,
+    /// 200, 201, 204) cause panics. We simplify each operation to keep only the
+    /// first response.
+    ///
+    /// ## Why This Complexity Is Necessary:
+    /// The DigitalOcean OpenAPI spec has several quality issues that would prevent
+    /// successful code generation without these workarounds. Each stage addresses
+    /// specific incompatibilities with progenitor and Rust's tooling.
     fn resolve_refs(&mut self, mut value: Value) -> Result<Value, Box<dyn std::error::Error>> {
         // Store the root spec for internal reference resolution
         self.root_spec = Some(value.clone());
@@ -228,6 +394,40 @@ impl RefResolver {
         self.resolve_single_ref_with_context(ref_str, current_dir, None)
     }
 
+    /// Resolves a single `$ref` directive to its target definition.
+    ///
+    /// ## Reference Format:
+    /// OpenAPI references follow the format: `[file_path]#[json_pointer]`
+    ///
+    /// ### Examples:
+    /// 1. **Internal reference** (within same file):
+    ///    ```yaml
+    ///    $ref: "#/definitions/droplet"
+    ///    ```
+    ///    Looks up `/definitions/droplet` in the current file or root spec.
+    ///
+    /// 2. **External file reference**:
+    ///    ```yaml
+    ///    $ref: "shared/droplet.yml#/properties/id"
+    ///    ```
+    ///    Loads `shared/droplet.yml` then navigates to `/properties/id`.
+    ///
+    /// 3. **File reference without pointer**:
+    ///    ```yaml
+    ///    $ref: "shared/droplet.yml"
+    ///    ```
+    ///    Loads entire file as the definition.
+    ///
+    /// ## Path Resolution Strategy:
+    /// 1. If ref starts with `#`, it's internal (use context or root spec)
+    /// 2. Otherwise, resolve path relative to `current_dir`
+    /// 3. If path doesn't exist and starts with `../../../shared/`, try `shared/` instead
+    ///    (workaround for incorrect relative paths in DigitalOcean spec)
+    /// 4. If file still doesn't exist, return a generic fallback schema
+    ///
+    /// ## Circular Reference Detection:
+    /// The `resolving` set tracks files currently being processed. If we encounter
+    /// a file already in this set, we've found a circular dependency and error out.
     fn resolve_single_ref_with_context(
         &mut self,
         ref_str: &str,
@@ -415,6 +615,28 @@ additionalProperties: true
         Ok(())
     }
 
+    /// Navigates through a YAML/JSON structure using JSON Pointer (RFC 6901).
+    ///
+    /// ## JSON Pointer Format:
+    /// A JSON Pointer is a string of tokens separated by `/` characters. Each token
+    /// is either a key name (for objects) or an index (for arrays).
+    ///
+    /// ### Examples:
+    /// - `/definitions/droplet` → Navigate to `value["definitions"]["droplet"]`
+    /// - `/paths/~1droplets/get` → `value["paths"]["/droplets"]["get"]` (~ escaping)
+    /// - `/items/0/name` → `value["items"][0]["name"]`
+    ///
+    /// ## Implementation Details:
+    /// 1. Empty pointer or `/` returns the root value
+    /// 2. Split pointer by `/` and navigate step by step
+    /// 3. For objects, look up the key
+    /// 4. For arrays, parse the token as an integer index
+    /// 5. If a key isn't found, try looking in `/definitions` as fallback
+    /// 6. If still not found, return a generic fallback schema instead of erroring
+    ///
+    /// ## Why Fallbacks?
+    /// The DigitalOcean spec has some broken references. Rather than failing the
+    /// build, we return generic object types to allow code generation to continue.
     fn apply_json_pointer(
         &self,
         value: &Value,
@@ -478,6 +700,26 @@ additionalProperties: true
         Ok(current.clone())
     }
 
+    /// Injects commonly-referenced but missing type definitions into the spec.
+    ///
+    /// ## The Problem:
+    /// The DigitalOcean OpenAPI spec references several types that are never defined:
+    /// - `forward_links`, `backward_links` (pagination)
+    /// - `existing_tags_array` (resource tagging)
+    /// - `kubernetes_node_pool_taint` (K8s node configuration)
+    /// - `region_state` (datacenter availability)
+    /// - `apiChatbot` (AI assistant features)
+    ///
+    /// These references would cause progenitor to fail with "undefined type" errors.
+    ///
+    /// ## The Solution:
+    /// Before resolving references, we inject reasonable definitions for these
+    /// missing types directly into the `/definitions` section. This allows the
+    /// reference resolution to succeed and generates working Rust types.
+    ///
+    /// ## Why Not Fix Upstream?
+    /// These issues exist in DigitalOcean's official spec. While we could report
+    /// them, we need the build to work today, so we patch them here.
     fn add_missing_definitions(
         &mut self,
         value: &mut Value,
@@ -501,6 +743,11 @@ additionalProperties: true
         Ok(())
     }
 
+    /// Adds `forward_links` and `backward_links` definitions for API pagination.
+    ///
+    /// These types are used throughout the API for paginated list responses.
+    /// - `forward_links`: Contains `first`, `last`, `next` URLs
+    /// - `backward_links`: Contains `first`, `last`, `prev` URLs
     fn add_pagination_link_definitions(
         &self,
         definitions: &mut serde_yaml::Mapping,
@@ -552,6 +799,14 @@ properties:
         Ok(())
     }
 
+    /// Adds definitions for common attributes used across multiple resources.
+    ///
+    /// Injects:
+    /// - `existing_tags_array`: For resource tagging (tags attached to droplets, etc.)
+    /// - `error_response`: Standard API error format
+    /// - `kubernetes_node_pool_taint`: K8s node scheduling constraints
+    /// - `region_state`: Datacenter availability (available/unavailable)
+    /// - `apiChatbot`: AI assistant configuration
     fn add_common_attribute_definitions(
         &self,
         definitions: &mut serde_yaml::Mapping,
@@ -682,6 +937,27 @@ properties:
         Ok(())
     }
 
+    /// Replaces any remaining unresolved `$ref` directives with fallback schemas.
+    ///
+    /// ## Why This Is Needed:
+    /// After 3 passes of reference resolution, some `$ref`s may still be unresolved due to:
+    /// - Broken relative paths (e.g., `../../../shared/missing.yml`)
+    /// - Non-existent files referenced in the spec
+    /// - Malformed references
+    ///
+    /// ## What Gets Cleaned:
+    /// Any `$ref` matching these patterns is replaced with a generic string type:
+    /// - `../../../shared/...` (broken relative paths)
+    /// - `#/api...` (invalid internal refs)
+    /// - `node.yml` (missing file)
+    /// - `shared/attributes/...` (missing shared attributes)
+    /// - `*.yml` without `#` (file-only refs that failed to load)
+    ///
+    /// ## Fallback Schema:
+    /// Unresolved refs become: `{ type: "string", description: "Fallback for..." }`
+    ///
+    /// This allows code generation to continue even with a broken spec, which is
+    /// better than failing the build entirely.
     fn clean_unresolved_refs(&self, value: &mut Value) -> Result<(), Box<dyn std::error::Error>> {
         match value {
             Value::Mapping(map) => {
@@ -740,6 +1016,57 @@ properties:
         Ok(())
     }
 
+    /// Simplifies API operations to have only one response per operation.
+    ///
+    /// ## CRITICAL FOR PROGENITOR 0.11.0
+    ///
+    /// ### The Problem:
+    /// Progenitor 0.11.0 has an internal assertion that each API operation can only
+    /// have ONE successful response type. Many DigitalOcean endpoints return multiple
+    /// success codes:
+    ///
+    /// ```yaml
+    /// responses:
+    ///   200:
+    ///     description: Success
+    ///     content:
+    ///       application/json: { schema: ... }
+    ///   201:
+    ///     description: Created
+    ///     content:
+    ///       application/json: { schema: ... }
+    ///   204:
+    ///     description: No Content
+    /// ```
+    ///
+    /// When progenitor encounters this, it panics with:
+    /// ```text
+    /// thread 'main' panicked at 'assertion failed: success_responses.len() <= 1'
+    /// ```
+    ///
+    /// ### The Solution:
+    /// For any operation with multiple 2xx responses (or >2 total responses), we:
+    /// 1. Keep ONLY the first success response (200, 201, etc.)
+    /// 2. Remove all other success responses
+    /// 3. Also simplify content-types (keep only first, e.g., `application/json`)
+    ///
+    /// ### Impact:
+    /// This means generated Rust functions will only return the first response type.
+    /// Users won't get distinct types for 200 vs 201 vs 204. This is a limitation
+    /// of progenitor 0.11.0, not the DigitalOcean API.
+    ///
+    /// ### Example Transformation:
+    /// ```yaml
+    /// # Before:
+    /// responses:
+    ///   200: { ... }
+    ///   201: { ... }
+    ///   204: { ... }
+    ///
+    /// # After:
+    /// responses:
+    ///   200: { ... }  # Only first success response kept
+    /// ```
     fn deduplicate_response_types(
         &self,
         value: &mut Value,
@@ -938,6 +1265,34 @@ properties:
         Ok(())
     }
 
+    /// Fixes documentation strings to prevent Rust doctest failures.
+    ///
+    /// ## The Problem:
+    /// OpenAPI `description` fields often contain code examples like:
+    /// - Shell commands: `curl -X POST ...`
+    /// - Kubernetes commands: `kubectl create secret ...`
+    /// - HTTP responses: `HTTP/1.1 403 Forbidden`
+    ///
+    /// When progenitor generates Rust doc comments from these, Rust's `cargo doc`
+    /// treats them as Rust doctests and tries to compile them, causing failures like:
+    /// ```text
+    /// error[E0425]: cannot find value `curl` in this scope
+    /// error[E0425]: cannot find value `kubectl` in this scope
+    /// ```
+    ///
+    /// ## The Solution:
+    /// Mark all non-Rust code blocks with the `text` language tag:
+    /// - Before: ` ```\ncurl ...` ` (Rust tries to compile this)
+    /// - After: ` ```text\ncurl ...` ` (Rust skips compilation)
+    ///
+    /// This function applies hundreds of targeted string replacements to catch
+    /// all variations of non-Rust code blocks in the OpenAPI descriptions.
+    ///
+    /// ## What Gets Fixed:
+    /// - Code blocks: ` ``` ` → ` ```text`
+    /// - URLs in text: `https://...` → `<https://...>` (prevents doc link errors)
+    /// - Template syntax: `<host>` → `\<host\>` (escapes angle brackets)
+    /// - Special characters: `[V2]` → `\[V2\]` (escapes square brackets)
     fn sanitize_documentation(&self, value: &mut Value) -> Result<(), Box<dyn std::error::Error>> {
         println!("Sanitizing documentation to fix doctest and doc generation issues...");
         let mut fixes_applied = 0;
@@ -954,6 +1309,11 @@ properties:
         Ok(())
     }
 
+    /// Recursively applies documentation fixes to all description/example fields.
+    ///
+    /// Walks the entire YAML tree and applies string replacements to any
+    /// `description` or `example` field found. See `sanitize_documentation`
+    /// for details on what gets fixed and why.
     fn apply_targeted_fixes(&self, value: &mut Value) -> Result<usize, Box<dyn std::error::Error>> {
         let mut fixes_count = 0;
 
@@ -1218,6 +1578,47 @@ properties:
     }
 }
 
+/// Generates Rust client code from the processed OpenAPI specification.
+///
+/// ## Code Generation Pipeline:
+///
+/// ### 1. YAML → JSON Conversion
+/// Progenitor requires JSON input, so we convert the YAML Value to JSON.
+/// Also saves a debug copy to `OUT_DIR/resolved_spec.json`.
+///
+/// ### 2. Parse to OpenAPI Struct
+/// Deserialize JSON into `openapiv3::OpenAPI` struct for type-safe access.
+/// This validates the spec structure and extracts metadata.
+///
+/// ### 3. Generate Proc-Macro Tokens
+/// `progenitor::Generator::generate_tokens()` is the core code generator.
+/// It produces a `TokenStream` containing Rust code as proc-macro tokens.
+///
+/// This is where progenitor can fail if the spec has issues like:
+/// - Multiple success responses (caught by our deduplication)
+/// - Invalid type references (caught by our reference resolution)
+/// - Malformed schemas (caught by our fallbacks)
+///
+/// ### 4. Parse Tokens to Syn AST
+/// Convert the raw token stream into a `syn::File` abstract syntax tree.
+/// This allows for potential manipulation before code generation.
+///
+/// ### 5. Format with Prettyplease
+/// `prettyplease::unparse()` converts the AST into nicely-formatted Rust code.
+///
+/// ### 6. Add Lint Suppressions
+/// Prepends `#[allow(...)]` attributes to silence warnings in generated code.
+/// Generated code often triggers clippy lints that aren't worth fixing.
+///
+/// ### 7. Fix Renamed Lints
+/// Progenitor generates `#[allow(elided_named_lifetimes)]` which was renamed
+/// to `#[allow(mismatched_lifetime_syntaxes)]` in newer Rust versions.
+///
+/// ## Output:
+/// Returns a String containing ~700,000 lines of Rust code defining:
+/// - `Client` struct with 500+ async methods
+/// - `types` module with schema definitions
+/// - Error types and response wrappers
 fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Error>> {
     println!("Generating Rust client code using progenitor...");
 
@@ -1338,10 +1739,37 @@ fn generate_client_code(spec: &Value) -> Result<String, Box<dyn std::error::Erro
     Ok(code)
 }
 
+/// Writes a minimal fallback client stub when code generation fails.
+///
+/// ## Why This Exists:
+/// If the OpenAPI download, reference resolution, or progenitor code generation
+/// fails for any reason, we don't want to completely break the build. Instead,
+/// we generate a minimal stub that:
+///
+/// 1. Allows the crate to compile (preventing build failures)
+/// 2. Provides basic `Client` structure
+/// 3. Includes type definitions for common patterns
+/// 4. Documents what went wrong in the comments
+///
+/// ## What's Included:
+/// - `Client` struct with `new_with_client()` constructor
+/// - `types` module with common types (Response, Links, ErrorResponse)
+/// - `Error` enum with basic error variants
+/// - `ResponseValue<T>` wrapper
+///
+/// ## Limitations:
+/// The stub doesn't include any actual API methods. Users will get compile
+/// errors if they try to call methods like `client.droplets_list()`.
+///
+/// ## When This Runs:
+/// Only when one of these stages fails:
+/// - OpenAPI spec download (network error, GitHub down)
+/// - Reference resolution (spec corruption, file missing)
+/// - Progenitor code generation (incompatible spec changes)
 fn write_stub_client(output_path: &Path) {
     let stub_content = r#"
 // Generated DigitalOcean API client (enhanced stub)
-// 
+//
 // Reference resolution: ✅ SUCCESS - All OpenAPI $ref directives resolved
 // Code generation: ❌ FAILED - Progenitor encountered issues with the resolved spec
 //
@@ -1350,7 +1778,7 @@ fn write_stub_client(output_path: &Path) {
 // specification. However, the resolved spec (19MB JSON) appears to contain constructs
 // that the current version of progenitor cannot handle.
 
-/// Enhanced client implementation with authentication support  
+/// Enhanced client implementation with authentication support
 #[derive(Debug, Clone)]
 pub struct Client {
     base_url: String,
