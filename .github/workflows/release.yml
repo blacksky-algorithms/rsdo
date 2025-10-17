@@ -107,9 +107,17 @@ jobs:
         with:
           ref: ${{ needs.check-and-release.outputs.tag_name }}
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Get MSRV from Cargo.toml
+        id: msrv
+        run: |
+          MSRV=$(grep '^rust-version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "MSRV is $MSRV"
+          echo "version=$MSRV" >> $GITHUB_OUTPUT
+
+      - name: Install Rust MSRV
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.msrv.outputs.version }}
           components: rustfmt
 
       - name: Cache cargo registry
@@ -121,12 +129,11 @@ jobs:
             target
           key: ${{ runner.os }}-quality-checks-cargo-${{ hashFiles('Cargo.lock') }}
 
-      - name: Check MSRV
+      - name: Verify Rust version
         run: |
-          MSRV=$(grep '^rust-version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
-          echo "MSRV is $MSRV"
+          echo "Expected MSRV: ${{ steps.msrv.outputs.version }}"
           rustc --version
-          rustc --version | grep -q "$MSRV" || (echo "Rust version mismatch"; exit 1)
+          rustc --version | grep -q "${{ steps.msrv.outputs.version }}" || (echo "Rust version mismatch"; exit 1)
 
       - name: Build and test (including doctests)
         run: .github/scripts/build_and_test.sh
@@ -183,7 +190,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact_name: rsdo.exe
             asset_name: rsdo-windows-x86_64.exe
-          - os: macos-latest
+          - os: macos-13
             target: x86_64-apple-darwin
             artifact_name: rsdo
             asset_name: rsdo-macos-x86_64
