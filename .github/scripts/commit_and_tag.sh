@@ -19,9 +19,9 @@ commit_and_tag() {
         TAG_MSG="Release ${TAG_NAME}"
     fi
     
-    # Commit version changes
+    # Commit version changes (allow empty commit if nothing changed)
     git add Cargo.toml Cargo.lock
-    git commit -m "${COMMIT_MSG}"
+    git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
     
     # Delete existing tag if it exists (for force mode)
     if git tag -l | grep -q "^${TAG_NAME}$"; then
