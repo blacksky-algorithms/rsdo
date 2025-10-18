@@ -36,12 +36,10 @@ jobs:
       - name: Run tests
         run: cargo test --locked
 
-      - name: Check semver compatibility
-        uses: obi1kenobi/cargo-semver-checks-action@v2
-        with:
-          # Skip baseline check for crates not yet published to crates.io
-          # After first publish, remove this to enable semver checking
-          baseline: skip
+      # Note: Skipping semver check for now since crate is not yet published
+      # After first publish, uncomment this to enable semver checking:
+      # - name: Check semver compatibility
+      #   uses: obi1kenobi/cargo-semver-checks-action@v2
 
       - name: Publish to crates.io (dry run)
         if: github.event.inputs.dry_run == 'true'

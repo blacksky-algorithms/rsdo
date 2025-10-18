@@ -138,12 +138,10 @@ jobs:
       - name: Build and test (including doctests)
         run: .github/scripts/build_and_test.sh
 
-      - name: Check semver compatibility
-        uses: obi1kenobi/cargo-semver-checks-action@v2
-        with:
-          # Skip baseline check for crates not yet published to crates.io
-          # After first publish, this can be removed to enable semver checking
-          baseline: skip
+      # Note: Skipping semver check for now since crate is not yet published
+      # After first publish, uncomment this to enable semver checking:
+      # - name: Check semver compatibility
+      #   uses: obi1kenobi/cargo-semver-checks-action@v2
 
       - name: Check formatting
         run: .github/scripts/pre_publish_checks.sh
