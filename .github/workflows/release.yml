@@ -140,6 +140,10 @@ jobs:
 
       - name: Check semver compatibility
         uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          # Skip baseline check for crates not yet published to crates.io
+          # After first publish, this can be removed to enable semver checking
+          baseline: skip
 
       - name: Check formatting
         run: .github/scripts/pre_publish_checks.sh
@@ -173,66 +177,8 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  build-binaries:
-    name: Build Binaries
-    runs-on: ${{ matrix.os }}
-    needs: check-and-release
-    if: needs.check-and-release.outputs.should_release == 'true'
-    
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: rsdo
-            asset_name: rsdo-linux-x86_64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: rsdo.exe
-            asset_name: rsdo-windows-x86_64.exe
-          - os: macos-13
-            target: x86_64-apple-darwin
-            artifact_name: rsdo
-            asset_name: rsdo-macos-x86_64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: rsdo
-            asset_name: rsdo-macos-aarch64
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.check-and-release.outputs.tag_name }}
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('Cargo.lock') }}
-
-      - name: Build binary
-        run: cargo build --locked --release --target ${{ matrix.target }}
-
-      - name: Prepare binary for upload
-        run: .github/scripts/prepare_binary.sh "${{ matrix.target }}" "${{ matrix.artifact_name }}"
-
-      - name: Upload binary to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.check-and-release.outputs.tag_name }}
-          files: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Note: rsdo is a library crate, not a binary, so we don't build platform-specific binaries.
+  # Users will include rsdo as a dependency in their Cargo.toml instead.
 
   generate-sbom:
     name: Generate and Attach SBOM
