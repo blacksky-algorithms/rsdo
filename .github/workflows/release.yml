@@ -239,7 +239,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-and-release
     if: needs.check-and-release.outputs.should_release == 'true'
-    
+    continue-on-error: true  # Don't fail entire workflow if SBOM generation fails
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -249,7 +250,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
+      - name: Cache cargo registry and target
         uses: actions/cache@v4
         with:
           path: |
@@ -257,20 +258,34 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-sbom-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-sbom-cargo-
+
+      - name: Cache cargo-cyclonedx installation
+        id: cache-cyclonedx
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-cyclonedx
+          key: ${{ runner.os }}-cargo-cyclonedx-0.5.7
 
       - name: Install cargo-cyclonedx
-        run: cargo install cargo-cyclonedx
+        if: steps.cache-cyclonedx.outputs.cache-hit != 'true'
+        run: cargo install cargo-cyclonedx --version 0.5.7 --locked
+
+      - name: Verify project builds
+        run: cargo check --locked
 
       - name: Generate SBOM files
         run: .github/scripts/generate_sbom.sh
 
       - name: Upload SBOM files to release
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-and-release.outputs.tag_name }}
           files: |
             rsdo-sbom.json
             rsdo-sbom.xml
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
