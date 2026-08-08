@@ -9,6 +9,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Fail the build instead of silently generating the stub client. Without this,
+  # a failed spec download produces a client with no API operations that still
+  # compiles and passes tests.
+  RSDO_REQUIRE_CODEGEN: 1
 
 jobs:
   msrv:
@@ -16,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       - name: Install Rust MSRV
         uses: dtolnay/rust-toolchain@stable
@@ -37,22 +41,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
 
+      # `cargo fmt` REFORMATS the tree and exits 0 -- it never fails a build.
+      # `--check` is what actually reports unformatted code.
       - name: Check formatting
-        run: cargo fmt
+        run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -60,7 +66,7 @@ jobs:
           components: clippy
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -87,7 +93,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust ${{ matrix.rust }}
         uses: dtolnay/rust-toolchain@master
@@ -95,7 +101,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -114,13 +120,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -136,13 +142,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -163,13 +169,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
       - name: Security audit
-        uses: rustsec/audit-check@v1.4.1
+        uses: rustsec/audit-check@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -178,7 +184,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -189,24 +195,30 @@ jobs:
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx
         
+      # --override-filename takes the base name WITHOUT the extension; cyclonedx
+      # appends it. Passing "rsdo-sbom.json" wrote "rsdo-sbom.json.json", so the
+      # uploads below silently found no files ("No files were found with the
+      # provided path") and every SBOM artifact was empty.
       - name: Generate SBOM (JSON)
-        run: cargo cyclonedx --format json --override-filename rsdo-sbom.json
-        
+        run: cargo cyclonedx --format json --override-filename rsdo-sbom
+
       - name: Upload SBOM JSON artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rsdo-sbom-json
           path: rsdo-sbom.json
+          if-no-files-found: error
           retention-days: 30
-          
+
       - name: Generate SBOM (XML)
-        run: cargo cyclonedx --format xml --override-filename rsdo-sbom.xml
-        
+        run: cargo cyclonedx --format xml --override-filename rsdo-sbom
+
       - name: Upload SBOM XML artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rsdo-sbom-xml
           path: rsdo-sbom.xml
+          if-no-files-found: error
           retention-days: 30
 
   coverage:
@@ -214,7 +226,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -231,7 +243,7 @@ jobs:
         run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
         
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: lcov.info
           fail_ci_if_error: false

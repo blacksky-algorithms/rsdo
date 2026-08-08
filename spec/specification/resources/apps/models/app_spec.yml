@@ -1,0 +1,110 @@
+title: AppSpec
+type: object
+description: The desired configuration of an application.
+properties:
+  name:
+    description: The name of the app. Must be unique across all apps in the same account.
+    maxLength: 32
+    minLength: 2
+    pattern: ^[a-z][a-z0-9-]{0,30}[a-z0-9]$
+    type: string
+    example: web-app-01
+
+  region:
+    description: 'The slug form of the geographical origin of the app. Default: `nearest
+      available`'
+    type: string
+    enum:
+    - atl
+    - nyc
+    - sfo
+    - tor
+    - ams
+    - fra
+    - lon
+    - blr
+    - sgp
+    - syd
+    example: nyc
+
+  disable_edge_cache:
+    description: |-
+      If set to `true`, the app will **not** be cached at the edge (CDN). Enable this option if you want to manage CDN configuration yourself—whether by using an external CDN provider or by handling static content and caching within your app. This setting is also recommended for apps that require real-time data or serve dynamic content, such as those using Server-Sent Events (SSE) over GET, or hosting an MCP (Model Context Protocol) Server that utilizes SSE.  
+      **Note:** This feature is not available for static site components.  
+      For more information, see [Disable CDN Cache](https://docs.digitalocean.com/products/app-platform/how-to/cache-content/#disable-cdn-cache).
+
+    type: boolean
+    default: false
+
+  disable_email_obfuscation:
+    description: |-
+      If set to `true`, email addresses in the app will not be obfuscated. This is
+      useful for apps that require email addresses to be visible (in the HTML markup).
+    type: boolean
+    default: false
+
+  enhanced_threat_control_enabled:
+    description: |-
+      If set to `true`, suspicious requests will go through additional security checks to help mitigate layer 7 DDoS attacks.
+    type: boolean
+    default: false
+
+  domains:
+    description: A set of hostnames where the application will be available.
+    type: array
+    items:
+      $ref: app_domain_spec.yml
+
+  services:
+    description: Workloads which expose publicly-accessible HTTP services.
+    type: array
+    items:
+      $ref: app_service_spec.yml
+
+  static_sites:
+    description: Content which can be rendered to static web assets.
+    type: array
+    items:
+      $ref: app_static_site_spec.yml
+
+  jobs:
+    description: Pre and post deployment workloads which do not expose publicly-accessible
+      HTTP routes.
+    type: array
+    items:
+      $ref: app_job_spec.yml
+
+  workers:
+    description: Workloads which do not expose publicly-accessible HTTP services.
+    items:
+      $ref: app_worker_spec.yml
+    type: array
+
+  functions:
+    description: Workloads which expose publicly-accessible HTTP services via Functions Components.
+    items:
+      $ref: app_functions_spec.yml
+    type: array
+
+  databases:
+    description: |-
+      Database instances which can provide persistence to workloads within the
+      application.
+    type: array
+    items:
+      $ref: app_database_spec.yml
+
+  ingress:
+    $ref: app_ingress_spec.yml
+
+  egress:
+    $ref: app_egress_spec.yml
+
+  maintenance:
+    $ref: app_maintenance_spec.yml
+  
+  vpc:
+    $ref: apps_vpc.yml
+
+required:
+- name

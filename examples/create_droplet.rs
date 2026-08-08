@@ -53,34 +53,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .as_secs()
     );
 
-    let create_request = DropletsCreateBody::SingleDropletRequest {
-        name: droplet_name.clone().parse()?,
-        region: Some("nyc1".to_string()),
-        size: "s-1vcpu-1gb".to_string(),
-        image: SingleDropletRequestImage::Variant0("ubuntu-22-04-x64".to_string()),
-        ssh_keys: vec![],
-        backups: false,
-        ipv6: true,
-        monitoring: true,
-        private_networking: false,
-        backup_policy: None,
-        tags: Some(vec![
-            "rsdo".to_string(),
-            "example".to_string(),
-            "rust".to_string(),
-        ]),
-        user_data: Some(
-            r#"#!/bin/bash
+    // Build the request by deserializing from JSON rather than with a struct
+    // literal. `DropletsCreateBody` is generated from the upstream DigitalOcean
+    // OpenAPI spec, and a struct literal has to name *every* field -- so each
+    // time DigitalOcean adds an optional field to the create-droplet request,
+    // a literal here stops compiling and breaks the release build. Every
+    // generated field carries `#[serde(default)]`, so deserializing from JSON
+    // only names the fields we actually care about and tolerates additive
+    // upstream changes.
+    let create_request: DropletsCreateBody = serde_json::from_value(serde_json::json!({
+        "name": droplet_name.clone(),
+        "region": "nyc1",
+        "size": "s-1vcpu-1gb",
+        "image": "ubuntu-22-04-x64",
+        "ipv6": true,
+        "monitoring": true,
+        "tags": ["rsdo", "example", "rust"],
+        "user_data": r#"#!/bin/bash
 echo "Hello from rsdo!" > /tmp/rsdo-hello.txt
 apt-get update
 apt-get install -y curl
-"#
-            .to_string(),
-        ),
-        volumes: vec![],
-        vpc_uuid: None,
-        with_droplet_agent: Some(true),
-    };
+"#,
+        "with_droplet_agent": true,
+    }))?;
 
     println!("\n🚀 Creating droplet '{}'...", droplet_name);
     println!("   Region: nyc1");

@@ -1,0 +1,49 @@
+type: object
+
+properties:
+  droplet_id:
+    type: integer
+    example: 459903570
+    description: The unique identifier of the Droplet.
+  created_at:
+    format: date-time
+    description: The creation time of the Droplet in ISO8601 combined date and time format.
+    type: string
+    example: 2020-07-28T18:00:00Z  
+  updated_at:
+    format: date-time
+    description: The last updated time of the Droplet in ISO8601 combined date and time format.
+    type: string
+    example: 2020-07-28T18:00:00Z
+  health_status:
+    type: string
+    enum:
+      - healthy
+      - unhealthy
+    example: 'healthy'
+    description: The health status of the Droplet.
+  unhealthy_reason:
+    type: string
+    description: |
+      A human-readable description of why the Droplet is unhealthy. Only
+      present when `health_status` is `unhealthy`.
+    example: 'Droplet failed health check'
+  status:
+    type: string
+    enum:
+      - provisioning
+      - active
+      - deleting
+      - "off"
+    description: The power status of the Droplet.
+    example: "active"
+  current_utilization:
+      $ref: ../models/member_current_utilization.yml
+
+required:
+  - droplet_id
+  - created_at
+  - updated_at
+  - health_status
+  - status
+  - current_utilization

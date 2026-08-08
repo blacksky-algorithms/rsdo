@@ -1,0 +1,204 @@
+accept:
+  description: The content-type that should be used by the response. By default,
+    the response will be `application/json`. `application/yaml` is also supported.
+  in: header
+  name: Accept
+  schema:
+    type: string
+    enum:
+      - application/json
+      - application/yaml
+  example: application/json
+
+content-type:
+  description: The content-type used for the request. By default, the requests
+    are assumed to use `application/json`. `application/yaml` is also supported.
+  in: header
+  name: Content-Type
+  schema:
+    type: string
+    enum:
+      - application/json
+      - application/yaml
+  example: application/json
+
+app_id:
+  description: The app ID
+  in: path
+  name: app_id
+  required: true
+  schema:
+    type: string
+  example: 4f6c71e2-1e90-4762-9fee-6cc4a0a9f2cf
+
+deployment_id:
+  description: The deployment ID
+  in: path
+  name: deployment_id
+  required: true
+  schema:
+    type: string
+  example: 3aa4d20e-5527-4c00-b496-601fbd22520a
+
+event_id:
+  description: The event ID
+  in: path
+  name: event_id
+  required: true
+  schema:
+    type: string
+  example: 4f6c71e2-1e90-4762-9fee-6cc4a0a9f2cf
+
+app_name:
+  description: The name of the app to retrieve.
+  in: query
+  name: name
+  schema:
+    type: string
+  example: myApp
+
+id_app:
+  description: The ID of the app
+  in: path
+  name: id
+  required: true
+  schema:
+    type: string
+  example: 4f6c71e2-1e90-4762-9fee-6cc4a0a9f2cf
+
+slug_size:
+  description: The slug of the instance size
+  in: path
+  name: slug
+  required: true
+  schema:
+    type: string
+  example: apps-s-1vcpu-0.5gb
+
+component:
+  description:
+    An optional component name. If set, logs will be limited to this component
+    only.
+  in: path
+  name: component_name
+  required: true
+  schema:
+    type: string
+  example: component
+
+live_updates:
+  description: Whether the logs should follow live updates.
+  in: query
+  name: follow
+  schema:
+    type: boolean
+  example: true
+
+with_projects:
+  description: Whether the project_id of listed apps should be fetched and included.
+  in: query
+  name: with_projects
+  schema:
+    type: boolean
+  example: true
+
+log_type:
+  description: |-
+    The type of logs to retrieve
+    - BUILD: Build-time logs
+    - DEPLOY: Deploy-time logs
+    - RUN: Live run-time logs
+    - RUN_RESTARTED: Logs of crashed/restarted instances during runtime
+    - AUTOSCALE_EVENT: Logs of an autoscaling event (requires event_id)
+  in: query
+  name: type
+  required: true
+  schema:
+    default: UNSPECIFIED
+    enum:
+      - UNSPECIFIED
+      - BUILD
+      - DEPLOY
+      - RUN
+      - RUN_RESTARTED
+      - AUTOSCALE_EVENT
+    type: string
+  example: BUILD
+
+time_wait:
+  description:
+    "An optional time duration to wait if the underlying component instance
+    is not immediately available. Default: `3m`."
+  in: query
+  name: pod_connection_timeout
+  schema:
+    type: string
+  example: 3m
+
+slug_tier:
+  description: The slug of the tier
+  in: path
+  name: slug
+  required: true
+  schema:
+    type: string
+  example: basic
+
+alert_id:
+  description: The alert ID
+  in: path
+  name: alert_id
+  required: true
+  schema:
+    type: string
+  example: 5a624ab5-dd58-4b39-b7dd-8b7c36e8a91d
+
+instance_name:
+  description: The name of the actively running ephemeral compute instance
+  in: query
+  name: instance_name
+  required: false
+  schema:
+    type: string
+  example: go-app-d768568df-zz77d
+
+job_name:
+  description: The job name to list job invocations for.
+  in: query
+  name: job_name
+  required: false
+  schema:
+    type: string
+  example: component
+
+job_names:
+  description:
+    The job names to list job invocations for.
+  in: query
+  name: job_names
+  required: false
+  schema:
+    type: array
+    items:
+      $ref: '#/job_name/schema'
+  example: [component1, component2]
+
+job_invocation_id:
+  description:
+    The ID of the job invocation to retrieve.
+  in: path
+  name: job_invocation_id
+  required: true
+  schema:
+    type: string
+  example: 123e4567-e89b-12d3-a456-426
+
+number_lines:
+  description: The number of lines from the end of the logs to retrieve.
+  in: query
+  name: tail_lines
+  required: false
+  schema:
+    type: string
+    format: int64
+  example: "100"

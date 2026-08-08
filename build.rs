@@ -60,19 +60,24 @@ use std::{
 /// If any stage fails, writes a fallback stub client instead of failing the build.
 /// This ensures the crate can still compile, though with limited functionality.
 fn main() {
+    // Re-run when the pinned revision or the strictness flag changes, so bumping
+    // OPENAPI_SPEC_REF actually regenerates instead of reusing a cached OUT_DIR.
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=RSDO_OPENAPI_REF");
+    println!("cargo:rerun-if-env-changed=RSDO_REQUIRE_CODEGEN");
+
     let out_dir = env::var("OUT_DIR").unwrap();
-    let spec_dir = Path::new(&out_dir).join("digitalocean-openapi");
     let output_path = Path::new(&out_dir).join("codegen.rs");
 
-    // Download and extract OpenAPI specification
-    if !spec_dir.exists() {
-        if let Err(e) = download_openapi_spec(&spec_dir) {
-            eprintln!("Failed to download OpenAPI spec: {}", e);
-            println!("cargo:warning=Failed to download OpenAPI spec, using fallback stub");
-            write_stub_client(&output_path);
+    // Resolve where the spec comes from: the vendored copy (default, no network)
+    // or a download of an explicitly requested revision.
+    let spec_dir = match resolve_spec_dir(&out_dir) {
+        Ok(dir) => dir,
+        Err(e) => {
+            fall_back_to_stub(&output_path, "obtain OpenAPI spec", &e.to_string());
             return;
         }
-    }
+    };
 
     // Process the OpenAPI specification with full reference resolution
     let spec_path = spec_dir.join("specification/DigitalOcean-public.v2.yaml");
@@ -89,35 +94,201 @@ fn main() {
                     );
                 }
                 Err(e) => {
-                    eprintln!("Failed to generate client code: {}", e);
-                    println!(
-                        "cargo:warning=Failed to generate client code: {}, using fallback stub",
-                        e
-                    );
-                    write_stub_client(&output_path);
+                    fall_back_to_stub(&output_path, "generate client code", &e.to_string());
                 }
             }
         }
         Err(e) => {
-            eprintln!("Failed to process OpenAPI spec: {}", e);
-            println!(
-                "cargo:warning=Failed to process OpenAPI spec: {}, using fallback stub",
-                e
-            );
-            write_stub_client(&output_path);
+            fall_back_to_stub(&output_path, "process OpenAPI spec", &e.to_string());
         }
     }
 }
 
-/// Downloads and extracts the latest DigitalOcean OpenAPI specification from GitHub.
+/// Decides which copy of the OpenAPI spec this build should use.
+///
+/// ## Default: the vendored spec, with no network access at all
+/// The spec that the client is generated from is committed under `spec/` and
+/// ships inside the published crate. This is what makes the build hermetic:
+/// docs.rs builds with **networking permanently blocked**, so a build script
+/// that downloads its input can only ever produce the stub client there -- which
+/// is exactly why every published version of rsdo documented `from_token` and
+/// none of its ~659 API operations. Vendoring also means offline builds, sealed
+/// CI environments, and old tags all keep working.
+///
+/// ## Refreshing
+/// Set `RSDO_OPENAPI_REF` to a branch, tag, or commit SHA to ignore the vendored
+/// copy and download that revision instead; `.github/workflows/spec-drift.yml`
+/// uses this to test upstream changes and re-vendor the tree.
+fn resolve_spec_dir(out_dir: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let requested_ref = env::var("RSDO_OPENAPI_REF").ok();
+
+    if requested_ref.is_none() {
+        let vendored = Path::new(env!("CARGO_MANIFEST_DIR")).join(VENDORED_SPEC_DIR);
+        if vendored
+            .join("specification/DigitalOcean-public.v2.yaml")
+            .is_file()
+        {
+            println!(
+                "cargo:rerun-if-changed={}",
+                vendored.join("specification").display()
+            );
+            let revision = fs::read_to_string(vendored.join("REVISION"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|_| "unknown".to_string());
+            println!(
+                "Using vendored DigitalOcean OpenAPI specification ({revision}); no download needed"
+            );
+            return Ok(vendored);
+        }
+        println!(
+            "cargo:warning=No vendored spec found at {}; falling back to downloading the pinned revision",
+            vendored.display()
+        );
+    }
+
+    // Download path: either an explicitly requested revision, or the pinned
+    // default when the vendored copy is missing.
+    let spec_dir = Path::new(out_dir).join("digitalocean-openapi");
+    if !spec_dir.exists() {
+        if let Err(e) = download_openapi_spec(&spec_dir) {
+            // Leave no half-extracted tree behind, or the next build would treat
+            // the partial download as a usable cached spec.
+            let _ = fs::remove_dir_all(&spec_dir);
+            return Err(e);
+        }
+    }
+    Ok(spec_dir)
+}
+
+/// Writes the stub client after a failed generation stage -- or aborts the build.
+///
+/// The stub keeps local development working when GitHub is unreachable, but it
+/// exposes none of the real API. Publishing it is far worse than failing: a stub
+/// build compiles cleanly and passes tests, so a transient network error during a
+/// release would ship an empty crate to crates.io and hollow docs to docs.rs.
+/// CI and release jobs therefore set `RSDO_REQUIRE_CODEGEN=1` to make this fatal.
+fn fall_back_to_stub(output_path: &Path, stage: &str, error: &str) {
+    eprintln!("Failed to {stage}: {error}");
+
+    if require_codegen() {
+        panic!(
+            "Failed to {stage}: {error}\n\
+             RSDO_REQUIRE_CODEGEN is set, so falling back to the stub client is not \
+             allowed -- a stub build would publish a crate with no API surface."
+        );
+    }
+
+    println!("cargo:warning=Failed to {stage}: {error}; using fallback stub client");
+    println!(
+        "cargo:warning=The stub client exposes NO DigitalOcean API operations. \
+         Set RSDO_REQUIRE_CODEGEN=1 to make this a hard error."
+    );
+    write_stub_client(output_path);
+}
+
+/// The pinned upstream revision of https://github.com/digitalocean/openapi.
+///
+/// Bump this deliberately (and re-run the build + examples) to pick up new
+/// DigitalOcean API surface. Additive upstream changes can break hand-written
+/// code under `examples/`, so a bump is a reviewable change, not a silent one.
+///
+/// Pinned to `7c1300c4` (2026-08-07, "update disk_info enum members (#1212)").
+const OPENAPI_SPEC_REF: &str = "7c1300c479fed9c353cda9fc21cd968619552304";
+
+/// Number of times to attempt the spec download before giving up.
+const DOWNLOAD_ATTEMPTS: u32 = 3;
+
+/// Directory (relative to the crate root) holding the vendored spec tree.
+///
+/// Contains `specification/` copied verbatim from [`OPENAPI_SPEC_REF`] plus a
+/// `REVISION` file recording which upstream commit it came from.
+const VENDORED_SPEC_DIR: &str = "spec";
+
+/// Resolves the upstream spec revision to build against.
+///
+/// Defaults to the pinned [`OPENAPI_SPEC_REF`]; set `RSDO_OPENAPI_REF` to any
+/// branch, tag, or commit SHA to test against a different revision, e.g.
+/// `RSDO_OPENAPI_REF=main cargo build` to check for upstream drift.
+fn openapi_spec_ref() -> String {
+    env::var("RSDO_OPENAPI_REF").unwrap_or_else(|_| OPENAPI_SPEC_REF.to_string())
+}
+
+/// True when the build must not silently degrade to the stub client.
+///
+/// Set `RSDO_REQUIRE_CODEGEN=1` in CI and release pipelines. Without it a
+/// transient network failure yields a stub client that compiles, tests green,
+/// and would publish an empty crate to crates.io.
+fn require_codegen() -> bool {
+    matches!(
+        env::var("RSDO_REQUIRE_CODEGEN").as_deref(),
+        Ok("1") | Ok("true")
+    )
+}
+
+/// Downloads `url`, retrying on transient failures with a bounded timeout.
+///
+/// The unretried, untimed-out `reqwest::blocking::get` this replaces could hang a
+/// CI job indefinitely, and a single blip meant a stub client for the whole build.
+fn download_with_retries(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .user_agent("rsdo-build-script")
+        .build()?;
+
+    let mut last_err = String::new();
+    for attempt in 1..=DOWNLOAD_ATTEMPTS {
+        match client.get(url).send() {
+            Ok(response) if response.status().is_success() => match response.bytes() {
+                Ok(bytes) => return Ok(bytes.to_vec()),
+                Err(e) => last_err = format!("failed reading body: {e}"),
+            },
+            Ok(response) => last_err = format!("HTTP {}", response.status()),
+            Err(e) => last_err = e.to_string(),
+        }
+
+        if attempt < DOWNLOAD_ATTEMPTS {
+            eprintln!("Spec download attempt {attempt} failed ({last_err}); retrying...");
+            std::thread::sleep(std::time::Duration::from_secs(2 * attempt as u64));
+        }
+    }
+
+    Err(format!("Failed to download {url} after {DOWNLOAD_ATTEMPTS} attempts: {last_err}").into())
+}
+
+/// Strips GitHub's single top-level `openapi-<ref>/` directory from an archive path.
+///
+/// Returns `None` for the archive root entry itself, which has nothing left after
+/// stripping and would otherwise be recreated as a stray empty directory.
+fn strip_archive_root(path: &Path) -> Option<PathBuf> {
+    let mut components = path.components();
+    components.next()?;
+    let rest = components.as_path();
+    if rest.as_os_str().is_empty() {
+        None
+    } else {
+        Some(rest.to_path_buf())
+    }
+}
+
+/// Downloads and extracts the DigitalOcean OpenAPI specification from GitHub.
 ///
 /// ## Source
-/// Downloads from: https://github.com/digitalocean/openapi (main branch)
+/// Downloads from: https://github.com/digitalocean/openapi at the *pinned* revision
+/// [`OPENAPI_SPEC_REF`], overridable with the `RSDO_OPENAPI_REF` environment variable.
+///
+/// ## Why the revision is pinned
+/// This build script generates the entire client from an upstream repository that is
+/// not versioned and changes several times a week. When the revision floated on
+/// `main`, an unmodified commit of *this* repo would build one day and fail the next:
+/// the April and May 2026 monthly releases both failed with no local change, because
+/// upstream added an optional `public_networking` field to the create-droplet request.
+/// Pinning makes a given rsdo commit reproducible; picking up spec changes is now an
+/// explicit, reviewable bump of the constant below.
 ///
 /// ## Process:
-/// 1. Downloads ZIP archive of the entire repo
+/// 1. Downloads ZIP archive of the repo at the pinned revision
 /// 2. Extracts all files to `spec_dir`
-/// 3. Strips the "openapi-main/" prefix from paths (GitHub ZIP artifact)
+/// 3. Strips the leading "openapi-<ref>/" prefix from paths (GitHub ZIP artifact)
 ///
 /// ## File Structure:
 /// After extraction, the spec is located at:
@@ -134,27 +305,24 @@ fn main() {
 /// This function is only called if `spec_dir` doesn't exist, so the spec is
 /// downloaded once per clean build.
 fn download_openapi_spec(spec_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Downloading DigitalOcean OpenAPI specification...");
+    let spec_ref = openapi_spec_ref();
+    println!("Downloading DigitalOcean OpenAPI specification at {spec_ref}...");
 
-    let url = "https://github.com/digitalocean/openapi/archive/refs/heads/main.zip";
-    let response = reqwest::blocking::get(url)?;
-
-    if !response.status().is_success() {
-        return Err(format!("Failed to download: HTTP {}", response.status()).into());
-    }
-
-    let bytes = response.bytes()?;
+    let url = format!("https://github.com/digitalocean/openapi/archive/{spec_ref}.zip");
+    let bytes = download_with_retries(&url)?;
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
 
     // Extract all files
     for i in 0..zip.len() {
         let mut file = zip.by_index(i)?;
         let enclosed_name = file.enclosed_name().ok_or("Invalid file path in zip")?;
-        let outpath = spec_dir.join(
-            enclosed_name
-                .strip_prefix("openapi-main/")
-                .unwrap_or(&enclosed_name),
-        );
+        // GitHub wraps the archive in a single "openapi-<ref>" directory. The exact
+        // name depends on the ref (branch name, tag, or commit SHA), so strip the
+        // first path component rather than one hard-coded prefix.
+        let Some(stripped) = strip_archive_root(&enclosed_name) else {
+            continue; // the archive root entry itself
+        };
+        let outpath = spec_dir.join(&stripped);
 
         if file.name().ends_with('/') {
             fs::create_dir_all(&outpath)?;

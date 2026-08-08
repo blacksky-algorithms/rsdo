@@ -1,0 +1,13 @@
+lang: Python
+source: |-
+  import os
+  from pydo import Client
+
+  client = Client(token=os.environ.get("DIGITALOCEAN_TOKEN"))
+  
+  req = {
+        "type": "unreferenced blobs only"
+        
+  }
+
+  resp = client.registry.run_garbage_collection(registry_name="example",body=req)

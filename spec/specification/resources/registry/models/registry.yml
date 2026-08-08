@@ -1,0 +1,10 @@
+type: object
+
+allOf:
+  - $ref: 'registry_base.yml'
+  - type: object
+    properties:
+      subscription:
+        allOf:
+          - readOnly: true
+          - $ref: 'subscription.yml'

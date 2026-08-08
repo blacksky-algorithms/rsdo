@@ -1,0 +1,100 @@
+type: object
+
+properties:
+  pg_allow_replication:
+    type: boolean
+    example: true
+    description: |
+      For PostgreSQL clusters, set to `true` to grant the user replication
+      privileges. When omitted on create or update, the value defaults to
+      `false` and replication privileges are not granted. This option is not
+      currently supported for other database engines.
+  opensearch_acl:
+    type: array
+    items:
+      type: object
+      properties:
+        index:
+          type: string
+          example: index-abc.*
+          description: A regex for matching the indexes that this ACL should apply to.
+        permission:
+          type: string
+          enum:
+            - deny
+            - admin
+            - read
+            - readwrite
+            - write
+          example: read
+          description: >-
+            Permission set applied to the ACL. 'read' allows user to
+            read from the index. 'write' allows for user to write
+            to the index. 'readwrite' allows for both 'read' and
+            'write' permission. 'deny'(default) restricts user from performing
+            any operation over an index. 'admin' allows for 'readwrite' as
+            well as any operations to administer the index.
+    description: >-
+      ACLs (Access Control Lists) specifying permissions on index within a
+      OpenSearch cluster.
+  acl:
+    type: array
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          description: An identifier for the ACL. Will be computed after the ACL is created/updated.
+          example: "aaa"
+        topic:
+          type: string
+          example: topic-abc.*
+          description: A regex for matching the topic(s) that this ACL should apply to.
+        permission:
+          type: string
+          enum:
+            - admin
+            - consume
+            - produce
+            - produceconsume
+          example: consume
+          description: >-
+            Permission set applied to the ACL. 'consume' allows for messages to
+            be consumed from the topic. 'produce' allows for messages to be
+            published to the topic. 'produceconsume' allows for both 'consume'
+            and 'produce' permission. 'admin' allows for 'produceconsume' as
+            well as any operations to administer the topic (delete, update).
+      required:
+        - topic
+        - permission
+    description: >-
+      ACLs (Access Control Lists) specifying permissions on topics within a
+      Kafka cluster.
+  mongo_user_settings:
+    type: object
+    properties:
+      databases:
+        type: array
+        items:
+          type: string
+          example: my-db
+        example: [my-db, my-db-2]
+        description: >-
+          A list of databases to which the user should have access. When the database is set to `admin`,
+          the user will have access to all databases based on the user's role i.e. a user with the role `readOnly`
+          assigned to the `admin` database will have read access to all databases.
+      role:
+        type: string
+        enum:
+          - readOnly
+          - readWrite
+          - dbAdmin
+        example: readOnly
+        description: >-
+          The role to assign to the user with each role mapping to a MongoDB built-in role. 
+          `readOnly` maps to a [read](https://www.mongodb.com/docs/manual/reference/built-in-roles/#mongodb-authrole-read) role.
+          `readWrite` maps to a [readWrite](https://www.mongodb.com/docs/manual/reference/built-in-roles/#mongodb-authrole-readWrite) role.
+          `dbAdmin` maps to a [dbAdmin](https://www.mongodb.com/docs/manual/reference/built-in-roles/#mongodb-authrole-dbAdmin) role.
+    description: >-
+      MongoDB-specific settings for the user. This option is not currently
+      supported for other database engines.

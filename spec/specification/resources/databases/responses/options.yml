@@ -1,0 +1,809 @@
+description: A JSON string with a key of `options`.
+
+headers:
+  ratelimit-limit:
+    $ref: "../../../shared/headers.yml#/ratelimit-limit"
+  ratelimit-remaining:
+    $ref: "../../../shared/headers.yml#/ratelimit-remaining"
+  ratelimit-reset:
+    $ref: "../../../shared/headers.yml#/ratelimit-reset"
+
+content:
+  application/json:
+    schema:
+      $ref: "../models/options.yml"
+    example:
+      options:
+        kafka:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc2
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "3.8"
+          layouts:
+            - num_nodes: 3
+              sizes:
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - db-s-2vcpu-4gb
+                - db-s-2vcpu-2gb
+            - num_nodes: 6
+              sizes:
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+            - num_nodes: 9
+              sizes:
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+            - num_nodes: 15
+              sizes:
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+          default_version: "3.8"
+        mongodb:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc2
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "6.0"
+            - "7.0"
+          layouts:
+            - num_nodes: 1
+              sizes:
+                - db-s-1vcpu-1gb
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - db-s-8vcpu-32gb
+                - db-s-16vcpu-64gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - gd-16vcpu-64gb
+                - gd-32vcpu-128gb
+                - gd-40vcpu-160gb
+                - so1_5-2vcpu-16gb
+                - so1_5-4vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - so1_5-24vcpu-192gb
+                - so1_5-32vcpu-256gb
+            - num_nodes: 3
+              sizes:
+                - db-s-1vcpu-1gb
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - db-s-8vcpu-32gb
+                - db-s-16vcpu-64gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - gd-16vcpu-64gb
+                - gd-32vcpu-128gb
+                - gd-40vcpu-160gb
+                - so1_5-2vcpu-16gb
+                - so1_5-4vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - so1_5-24vcpu-192gb
+                - so1_5-32vcpu-256gb
+          default_version: "7.0"
+        mysql:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc2
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "8"
+          layouts:
+            - num_nodes: 1
+              sizes:
+                - db-s-1vcpu-1gb
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - gd-16vcpu-64gb
+                - gd-32vcpu-128gb
+                - gd-40vcpu-160gb
+                - so1_5-2vcpu-16gb
+                - so1_5-4vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - so1_5-24vcpu-192gb
+                - so1_5-32vcpu-256gb
+                - db-intel-1vcpu-1gb
+                - db-amd-1vcpu-1gb
+                - db-intel-1vcpu-2gb
+                - db-amd-1vcpu-2gb
+                - db-amd-2vcpu-4gb
+                - db-intel-2vcpu-4gb
+                - db-amd-2vcpu-8gb
+                - db-intel-2vcpu-8gb
+                - db-intel-4vcpu-8gb
+                - db-amd-4vcpu-8gb
+                - db-amd-4vcpu-16gb
+                - db-intel-4vcpu-16gb
+                - db-intel-8vcpu-32gb
+                - db-amd-8vcpu-32gb
+                - db-intel-16vcpu-64gb
+                - db-amd-16vcpu-64gb
+            - num_nodes: 2
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - gd-16vcpu-64gb
+                - gd-32vcpu-128gb
+                - gd-40vcpu-160gb
+                - so1_5-2vcpu-16gb
+                - so1_5-4vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - so1_5-24vcpu-192gb
+                - so1_5-32vcpu-256gb
+                - db-intel-1vcpu-2gb
+                - db-amd-1vcpu-2gb
+                - db-amd-2vcpu-4gb
+                - db-intel-2vcpu-4gb
+                - db-intel-2vcpu-8gb
+                - db-amd-2vcpu-8gb
+                - db-intel-4vcpu-8gb
+                - db-amd-4vcpu-8gb
+                - db-intel-4vcpu-16gb
+                - db-amd-4vcpu-16gb
+                - db-amd-8vcpu-32gb
+                - db-intel-8vcpu-32gb
+                - db-amd-16vcpu-64gb
+                - db-intel-16vcpu-64gb
+            - num_nodes: 3
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - gd-16vcpu-64gb
+                - gd-32vcpu-128gb
+                - gd-40vcpu-160gb
+                - so1_5-2vcpu-16gb
+                - so1_5-4vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - so1_5-24vcpu-192gb
+                - so1_5-32vcpu-256gb
+                - db-intel-1vcpu-2gb
+                - db-amd-1vcpu-2gb
+                - db-amd-2vcpu-4gb
+                - db-intel-2vcpu-4gb
+                - db-intel-2vcpu-8gb
+                - db-amd-2vcpu-8gb
+                - db-intel-4vcpu-8gb
+                - db-amd-4vcpu-8gb
+                - db-intel-4vcpu-16gb
+                - db-amd-4vcpu-16gb
+                - db-amd-8vcpu-32gb
+                - db-intel-8vcpu-32gb
+                - db-amd-16vcpu-64gb
+                - db-intel-16vcpu-64gb
+          default_version: "8"
+        advanced_mysql:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc2
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "8.4.8"
+          layouts:
+            - num_nodes: 1
+              sizes:
+                - gd-2vcpu-8gb-intel
+                - so1_5-2vcpu-16gb-intel
+                - so1_5-2vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb-intel
+                - so1_5-4vcpu-32gb-intel
+                - so1_5-4vcpu-32gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - gd-8vcpu-32gb-intel
+                - so1_5-8vcpu-64gb-intel
+                - gd-16vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - gd-16vcpu-64gb-intel
+                - so1_5-16vcpu-128gb-intel
+                - so1_5-24vcpu-192gb
+                - so1_5-24vcpu-192gb-intel
+                - so1_5-32vcpu-256gb-intel
+                - gd-32vcpu-128gb
+                - gd-32vcpu-128gb-intel
+                - so1_5-32vcpu-256gb
+                - gd-40vcpu-160gb
+                - so1_5-48vcpu-384gb-intel
+                - gd-48vcpu-192gb-intel
+                - so1_5-48vcpu-256gb
+                - c-96-intel
+            - num_nodes: 3
+              sizes:
+                - gd-2vcpu-8gb-intel
+                - so1_5-2vcpu-16gb-intel
+                - so1_5-2vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb-intel
+                - so1_5-4vcpu-32gb-intel
+                - so1_5-4vcpu-32gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - gd-8vcpu-32gb-intel
+                - so1_5-8vcpu-64gb-intel
+                - gd-16vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - gd-16vcpu-64gb-intel
+                - so1_5-16vcpu-128gb-intel
+                - so1_5-24vcpu-192gb
+                - so1_5-24vcpu-192gb-intel
+                - so1_5-32vcpu-256gb-intel
+                - gd-32vcpu-128gb
+                - gd-32vcpu-128gb-intel
+                - so1_5-32vcpu-256gb
+                - gd-40vcpu-160gb
+                - so1_5-48vcpu-384gb-intel
+                - gd-48vcpu-192gb-intel
+                - so1_5-48vcpu-256gb
+                - c-96-intel
+          default_version: "8.4.8"
+        opensearch:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc2
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "1"
+            - "2"
+          layouts:
+            - num_nodes: 1
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - gd-2vcpu-8gb
+                - m3-2vcpu-16gb
+                - db-s-4vcpu-8gb
+                - gd-4vcpu-16gb
+                - m3-4vcpu-32gb
+                - m3-8vcpu-64gb
+            - num_nodes: 3
+              sizes:
+                - db-s-2vcpu-4gb
+                - gd-2vcpu-8gb
+                - m3-2vcpu-16gb
+                - db-s-4vcpu-8gb
+                - gd-4vcpu-16gb
+                - m3-4vcpu-32gb
+                - m3-8vcpu-64gb
+            - num_nodes: 6
+              sizes:
+                - gd-2vcpu-8gb
+                - m3-2vcpu-16gb
+                - gd-4vcpu-16gb
+                - m3-4vcpu-32gb
+                - m3-8vcpu-64gb
+            - num_nodes: 9
+              sizes:
+                - gd-2vcpu-8gb
+                - m3-2vcpu-16gb
+                - gd-4vcpu-16gb
+                - m3-4vcpu-32gb
+                - m3-8vcpu-64gb
+            - num_nodes: 15
+              sizes:
+                - gd-2vcpu-8gb
+                - m3-2vcpu-16gb
+                - gd-4vcpu-16gb
+                - m3-4vcpu-32gb
+                - m3-8vcpu-64gb
+          default_version: "2"
+        pg:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc2
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "13"
+            - "14"
+            - "15"
+            - "16"
+            - "17"
+          layouts:
+            - num_nodes: 1
+              sizes:
+                - db-s-1vcpu-1gb
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - gd-16vcpu-64gb
+                - gd-32vcpu-128gb
+                - gd-40vcpu-160gb
+                - so1_5-2vcpu-16gb
+                - so1_5-4vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - so1_5-24vcpu-192gb
+                - so1_5-32vcpu-256gb
+                - db-intel-1vcpu-1gb
+                - db-amd-1vcpu-1gb
+                - db-intel-1vcpu-2gb
+                - db-amd-1vcpu-2gb
+                - db-amd-2vcpu-4gb
+                - db-intel-2vcpu-4gb
+                - db-amd-2vcpu-8gb
+                - db-intel-2vcpu-8gb
+                - db-intel-4vcpu-8gb
+                - db-amd-4vcpu-8gb
+                - db-amd-4vcpu-16gb
+                - db-intel-4vcpu-16gb
+                - db-intel-8vcpu-32gb
+                - db-amd-8vcpu-32gb
+                - db-intel-16vcpu-64gb
+                - db-amd-16vcpu-64gb
+            - num_nodes: 2
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - gd-16vcpu-64gb
+                - gd-32vcpu-128gb
+                - gd-40vcpu-160gb
+                - so1_5-2vcpu-16gb
+                - so1_5-4vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - so1_5-24vcpu-192gb
+                - so1_5-32vcpu-256gb
+                - db-intel-1vcpu-2gb
+                - db-amd-1vcpu-2gb
+                - db-amd-2vcpu-4gb
+                - db-intel-2vcpu-4gb
+                - db-intel-2vcpu-8gb
+                - db-amd-2vcpu-8gb
+                - db-intel-4vcpu-8gb
+                - db-amd-4vcpu-8gb
+                - db-intel-4vcpu-16gb
+                - db-amd-4vcpu-16gb
+                - db-amd-8vcpu-32gb
+                - db-intel-8vcpu-32gb
+                - db-amd-16vcpu-64gb
+                - db-intel-16vcpu-64gb
+            - num_nodes: 3
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - gd-16vcpu-64gb
+                - gd-32vcpu-128gb
+                - gd-40vcpu-160gb
+                - so1_5-2vcpu-16gb
+                - so1_5-4vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - so1_5-24vcpu-192gb
+                - so1_5-32vcpu-256gb
+                - db-intel-1vcpu-2gb
+                - db-amd-1vcpu-2gb
+                - db-amd-2vcpu-4gb
+                - db-intel-2vcpu-4gb
+                - db-intel-2vcpu-8gb
+                - db-amd-2vcpu-8gb
+                - db-intel-4vcpu-8gb
+                - db-amd-4vcpu-8gb
+                - db-intel-4vcpu-16gb
+                - db-amd-4vcpu-16gb
+                - db-amd-8vcpu-32gb
+                - db-intel-8vcpu-32gb
+                - db-amd-16vcpu-64gb
+                - db-intel-16vcpu-64gb
+          default_version: "17"
+        advanced_pg:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc2
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "16"
+            - "17"
+            - "18"
+          layouts:
+            - num_nodes: 1
+              sizes:
+                - gd-2vcpu-8gb-intel
+                - so1_5-2vcpu-16gb-intel
+                - so1_5-2vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb-intel
+                - so1_5-4vcpu-32gb-intel
+                - so1_5-4vcpu-32gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - gd-8vcpu-32gb-intel
+                - so1_5-8vcpu-64gb-intel
+                - gd-16vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - gd-16vcpu-64gb-intel
+                - so1_5-16vcpu-128gb-intel
+                - so1_5-24vcpu-192gb
+                - so1_5-24vcpu-192gb-intel
+                - so1_5-32vcpu-256gb-intel
+                - gd-32vcpu-128gb
+                - gd-32vcpu-128gb-intel
+                - so1_5-32vcpu-256gb
+                - gd-40vcpu-160gb
+                - so1_5-48vcpu-384gb-intel
+                - gd-48vcpu-192gb-intel
+                - so1_5-48vcpu-256gb
+                - c-96-intel
+            - num_nodes: 2
+              sizes:
+                - gd-2vcpu-8gb-intel
+                - so1_5-2vcpu-16gb-intel
+                - so1_5-2vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb-intel
+                - so1_5-4vcpu-32gb-intel
+                - so1_5-4vcpu-32gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - gd-8vcpu-32gb-intel
+                - so1_5-8vcpu-64gb-intel
+                - gd-16vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - gd-16vcpu-64gb-intel
+                - so1_5-16vcpu-128gb-intel
+                - so1_5-24vcpu-192gb
+                - so1_5-24vcpu-192gb-intel
+                - so1_5-32vcpu-256gb-intel
+                - gd-32vcpu-128gb
+                - gd-32vcpu-128gb-intel
+                - so1_5-32vcpu-256gb
+                - gd-40vcpu-160gb
+                - so1_5-48vcpu-384gb-intel
+                - gd-48vcpu-192gb-intel
+                - so1_5-48vcpu-256gb
+                - c-96-intel
+            - num_nodes: 3
+              sizes:
+                - gd-2vcpu-8gb-intel
+                - so1_5-2vcpu-16gb-intel
+                - so1_5-2vcpu-16gb
+                - gd-2vcpu-8gb
+                - gd-4vcpu-16gb-intel
+                - so1_5-4vcpu-32gb-intel
+                - so1_5-4vcpu-32gb
+                - gd-4vcpu-16gb
+                - gd-8vcpu-32gb
+                - so1_5-8vcpu-64gb
+                - gd-8vcpu-32gb-intel
+                - so1_5-8vcpu-64gb-intel
+                - gd-16vcpu-64gb
+                - so1_5-16vcpu-128gb
+                - gd-16vcpu-64gb-intel
+                - so1_5-16vcpu-128gb-intel
+                - so1_5-24vcpu-192gb
+                - so1_5-24vcpu-192gb-intel
+                - so1_5-32vcpu-256gb-intel
+                - gd-32vcpu-128gb
+                - gd-32vcpu-128gb-intel
+                - so1_5-32vcpu-256gb
+                - gd-40vcpu-160gb
+                - so1_5-48vcpu-384gb-intel
+                - gd-48vcpu-192gb-intel
+                - so1_5-48vcpu-256gb
+                - c-96-intel
+          default_version: "18"
+        redis:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc2
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "7"
+          layouts:
+            - num_nodes: 1
+              sizes:
+                - db-s-1vcpu-1gb
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - db-s-8vcpu-32gb
+                - db-s-16vcpu-64gb
+                - m-2vcpu-16gb
+                - m-4vcpu-32gb
+                - m-8vcpu-64gb
+                - m-16vcpu-128gb
+                - m-24vcpu-192gb
+                - m-32vcpu-256gb
+            - num_nodes: 2
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - db-s-8vcpu-32gb
+                - db-s-16vcpu-64gb
+                - m-2vcpu-16gb
+                - m-4vcpu-32gb
+                - m-8vcpu-64gb
+                - m-16vcpu-128gb
+                - m-24vcpu-192gb
+                - m-32vcpu-256gb
+            - num_nodes: 3
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - db-s-8vcpu-32gb
+                - db-s-16vcpu-64gb
+                - m-2vcpu-16gb
+                - m-4vcpu-32gb
+                - m-8vcpu-64gb
+                - m-16vcpu-128gb
+                - m-24vcpu-192gb
+                - m-32vcpu-256gb
+        valkey:
+          regions:
+            - ams3
+            - blr1
+            - fra1
+            - lon1
+            - nyc1
+            - nyc3
+            - sfo2
+            - sfo3
+            - sgp1
+            - syd1
+            - tor1
+            - ric1
+            - atl1
+          versions:
+            - "8"
+          layouts:
+            - num_nodes: 1
+              sizes:
+                - db-s-1vcpu-1gb
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - db-s-8vcpu-32gb
+                - db-s-16vcpu-64gb
+                - m-2vcpu-16gb
+                - m-4vcpu-32gb
+                - m-8vcpu-64gb
+                - m-16vcpu-128gb
+                - m-24vcpu-192gb
+                - m-32vcpu-256gb
+            - num_nodes: 2
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - db-s-8vcpu-32gb
+                - db-s-16vcpu-64gb
+                - m-2vcpu-16gb
+                - m-4vcpu-32gb
+                - m-8vcpu-64gb
+                - m-16vcpu-128gb
+                - m-24vcpu-192gb
+                - m-32vcpu-256gb
+            - num_nodes: 3
+              sizes:
+                - db-s-1vcpu-2gb
+                - db-s-2vcpu-4gb
+                - db-s-4vcpu-8gb
+                - db-s-6vcpu-16gb
+                - db-s-8vcpu-32gb
+                - db-s-16vcpu-64gb
+                - m-2vcpu-16gb
+                - m-4vcpu-32gb
+                - m-8vcpu-64gb
+                - m-16vcpu-128gb
+                - m-24vcpu-192gb
+                - m-32vcpu-256gb
+          default_version: "8"
+      version_availability:
+        kafka:
+          - end_of_life: null
+            end_of_availability: "2025-06-03T00:00:00Z"
+            version: "3.8"
+            default: true
+        mongodb:
+          - end_of_life: "2025-07-01T07:00:00Z"
+            end_of_availability: null
+            version: "6.0"
+            default: false
+          - end_of_life: "2026-08-01T07:00:00Z"
+            end_of_availability: null
+            version: "7.0"
+            default: true
+        mysql:
+          - end_of_life: null
+            end_of_availability: null
+            version: "8"
+            default: true
+        opensearch:
+          - end_of_life: null
+            end_of_availability: null
+            version: "1"
+            default: false
+          - end_of_life: null
+            end_of_availability: null
+            version: "2"
+            default: true
+        pg:
+          - end_of_life: "2025-11-13T00:00:00Z"
+            end_of_availability: "2025-05-13T00:00:00Z"
+            version: "13"
+            default: false
+          - end_of_life: "2026-11-12T00:00:00Z"
+            end_of_availability: "2026-05-12T00:00:00Z"
+            version: "14"
+            default: false
+          - end_of_life: "2027-11-11T00:00:00Z"
+            end_of_availability: "2027-05-12T00:00:00Z"
+            version: "15"
+            default: false
+          - end_of_life: "2028-11-09T00:00:00Z"
+            end_of_availability: "2028-05-09T00:00:00Z"
+            version: "16"
+            default: false
+          - end_of_life: "2029-11-08T00:00:00Z"
+            end_of_availability: "2029-05-08T00:00:00Z"
+            version: "17"
+            default: true
+        redis:
+          - end_of_life: "2025-06-30T00:00:00Z"
+            end_of_availability: "2025-04-30T00:00:00Z"
+            version: "7"
+            default: true
+        valkey:
+          - end_of_life: null
+            end_of_availability: null
+            version: "8"
+            default: true
+        advanced_pg:
+          - end_of_life: "2028-11-09T00:00:00Z"
+            end_of_availability: "2028-05-09T00:00:00Z"
+            version: "16"
+            default: false
+          - end_of_life: "2029-11-08T00:00:00Z"
+            end_of_availability: "2029-05-08T00:00:00Z"
+            version: "17"
+            default: false
+          - end_of_life: "2030-11-13T00:00:00Z"
+            end_of_availability: "2030-05-13T00:00:00Z"
+            version: "18"
+            default: true
+        advanced_mysql:
+          - end_of_life: null
+            end_of_availability: null
+            version: "8.4.8"
+            default: true

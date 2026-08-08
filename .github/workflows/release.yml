@@ -26,6 +26,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # A failed spec download otherwise yields a stub client with no API operations
+  # that compiles and tests green -- and would be published to crates.io.
+  RSDO_REQUIRE_CODEGEN: 1
 
 jobs:
   check-and-release:
@@ -38,7 +41,7 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -60,7 +63,7 @@ jobs:
 
       - name: Cache cargo registry
         if: steps.check.outputs.should_release == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -103,7 +106,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ needs.check-and-release.outputs.tag_name }}
 
@@ -121,7 +124,7 @@ jobs:
           components: rustfmt
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -154,7 +157,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ needs.check-and-release.outputs.tag_name }}
 
@@ -162,7 +165,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -170,8 +173,24 @@ jobs:
             target
           key: ${{ runner.os }}-publish-cargo-${{ hashFiles('Cargo.lock') }}
 
+      # crates.io rejects a re-publish of an existing version, which would fail a
+      # re-run of an otherwise-recoverable release. Treat "already there" as done.
+      - name: Check whether version is already published
+        id: published
+        run: |
+          VERSION="${{ needs.check-and-release.outputs.version }}"
+          if curl -sS --fail -H 'User-Agent: rsdo-release-workflow' \
+               "https://crates.io/api/v1/crates/rsdo/${VERSION}" > /dev/null 2>&1; then
+            echo "rsdo ${VERSION} is already on crates.io; skipping publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rsdo ${VERSION} is not published yet."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to crates.io
-        run: cargo publish
+        if: steps.published.outputs.skip != 'true'
+        run: cargo publish --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -187,7 +206,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ needs.check-and-release.outputs.tag_name }}
 
@@ -195,7 +214,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -207,7 +226,7 @@ jobs:
 
       - name: Cache cargo-cyclonedx installation
         id: cache-cyclonedx
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/bin/cargo-cyclonedx
           key: ${{ runner.os }}-cargo-cyclonedx-0.5.7

@@ -1,0 +1,194 @@
+name: Upstream Spec Drift
+
+# The whole client is generated from digitalocean/openapi, which changes several
+# times a week and is not versioned. That spec is vendored under spec/ and pinned
+# by OPENAPI_SPEC_REF in build.rs, which is what makes builds reproducible and
+# lets docs.rs (where networking is permanently blocked) document the real API.
+# This workflow is what keeps the vendored copy from going stale.
+#
+# It exists because of a concrete failure: upstream added an optional
+# `public_networking` field to the create-droplet request on 2026-03-30, and the
+# April 1 and May 1 2026 monthly releases both failed on an unchanged repo. Because
+# those releases failed before their commit step, the repository went 60 days
+# without a commit and GitHub auto-disabled the release cron
+# (`disabled_inactivity`), so releases stopped silently.
+#
+# Running weekly, this surfaces upstream drift as a PR (or an issue when the new
+# spec breaks the build) instead of as a failed release, and the resulting repo
+# activity keeps the monthly release schedule from being auto-disabled again.
+
+on:
+  schedule:
+    # Every Monday at 09:00 UTC -- well before the monthly release on the 1st.
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RSDO_REQUIRE_CODEGEN: 1
+
+jobs:
+  check-drift:
+    name: Check for upstream spec drift
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve vendored and upstream revisions
+        id: revs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PINNED=$(tr -d '[:space:]' < spec/REVISION)
+          UPSTREAM=$(gh api repos/digitalocean/openapi/commits/main --jq .sha)
+          echo "Vendored: $PINNED"
+          echo "Upstream: $UPSTREAM"
+          echo "pinned=$PINNED" >> "$GITHUB_OUTPUT"
+          echo "upstream=$UPSTREAM" >> "$GITHUB_OUTPUT"
+          if [ "$PINNED" = "$UPSTREAM" ]; then
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "drifted=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Re-vendor first, then build. The build must exercise the tree that would
+      # actually be committed -- bumping OPENAPI_SPEC_REF without replacing spec/
+      # would be a silent no-op, since the vendored copy is what build.rs uses.
+      - name: Re-vendor spec at upstream revision
+        if: steps.revs.outputs.drifted == 'true'
+        env:
+          UPSTREAM: ${{ steps.revs.outputs.upstream }}
+        run: .github/scripts/vendor_spec.sh "$UPSTREAM"
+
+      - name: Install Rust stable
+        if: steps.revs.outputs.drifted == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        if: steps.revs.outputs.drifted == 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-spec-drift-cargo-${{ hashFiles('Cargo.lock') }}
+
+      # Build everything the release gate builds -- including examples, which is
+      # exactly what the April/May releases died on. `cargo test` builds examples;
+      # an additive upstream field breaks hand-written struct literals there.
+      # Also package, to catch the vendored tree pushing the crate over the
+      # crates.io size limit.
+      - name: Build and test against re-vendored spec
+        if: steps.revs.outputs.drifted == 'true'
+        id: verify
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          cargo build --locked --all-targets
+          cargo test --locked
+          cargo package --allow-dirty
+
+      - name: Open PR bumping the vendored spec
+        if: steps.revs.outputs.drifted == 'true' && steps.verify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PINNED: ${{ steps.revs.outputs.pinned }}
+          UPSTREAM: ${{ steps.revs.outputs.upstream }}
+        run: |
+          set -euo pipefail
+          BRANCH="chore/openapi-spec-${UPSTREAM:0:8}"
+
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Branch $BRANCH already exists; nothing to do."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+          SHORT="${UPSTREAM:0:8}"
+          git add spec build.rs
+          git commit -m "chore: bump vendored DigitalOcean OpenAPI spec to ${SHORT}"
+          git push origin "$BRANCH"
+
+          {
+            printf 'Updates the vendored `digitalocean/openapi` spec under `spec/`\n'
+            printf 'and the `OPENAPI_SPEC_REF` pin in `build.rs`.\n\n'
+            printf '| | revision |\n|---|---|\n'
+            printf '| from | `%s` |\n' "$PINNED"
+            printf '| to | `%s` |\n\n' "$UPSTREAM"
+            printf 'Verified before opening: `cargo build --locked --all-targets`,\n'
+            printf '`cargo test --locked` and `cargo package` all passed against the\n'
+            printf 're-vendored tree in this run.\n\n'
+            printf 'Review the `spec/` diff for new or changed request bodies -- an added\n'
+            printf 'field can break hand-written struct literals under `examples/`.\n\n'
+            printf 'Note that PRs opened with `GITHUB_TOKEN` do not trigger the CI workflow;\n'
+            printf 'close and reopen the PR if you want a full CI run before merging.\n\n'
+            printf 'Compare: https://github.com/digitalocean/openapi/compare/%s...%s\n' "$PINNED" "$UPSTREAM"
+          } > /tmp/pr-body.md
+
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: bump vendored DigitalOcean OpenAPI spec to ${SHORT}" \
+            --body-file /tmp/pr-body.md
+
+      - name: Open issue when the upstream spec breaks the build
+        if: steps.revs.outputs.drifted == 'true' && steps.verify.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PINNED: ${{ steps.revs.outputs.pinned }}
+          UPSTREAM: ${{ steps.revs.outputs.upstream }}
+        run: |
+          set -euo pipefail
+          TITLE="Upstream DigitalOcean spec ${UPSTREAM:0:8} breaks the build"
+
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "${UPSTREAM:0:8} in:title" \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Issue #$EXISTING already open for this revision."
+            exit 0
+          fi
+
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            printf 'The weekly spec-drift check re-vendored `digitalocean/openapi` at\n'
+            printf '`%s` and the build, tests, or packaging failed.\n\n' "$UPSTREAM"
+            printf 'The vendored revision (`%s`) is untouched on main, so\n' "$PINNED"
+            printf '**releases keep working** -- this is not urgent, but the spec will keep\n'
+            printf 'falling behind until it is resolved.\n\n'
+            printf 'The usual cause is an additive change to a request body: generated types\n'
+            printf 'are built from the spec, and any hand-written struct literal under\n'
+            printf '`examples/` must name every field, so a new optional field stops it\n'
+            printf 'compiling. Prefer building request bodies via\n'
+            printf '`serde_json::from_value(json!({ ... }))`, which tolerates additive\n'
+            printf 'upstream changes.\n\n'
+            printf 'Failing run: %s\n\n' "$RUN_URL"
+            printf 'Compare: https://github.com/digitalocean/openapi/compare/%s...%s\n' "$PINNED" "$UPSTREAM"
+          } > /tmp/issue-body.md
+
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "$TITLE" \
+            --body-file /tmp/issue-body.md
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.revs.outputs.drifted }}" = "true" ]; then
+            echo "Upstream drifted: ${{ steps.revs.outputs.pinned }} -> ${{ steps.revs.outputs.upstream }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Verification: ${{ steps.verify.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Vendored spec is up to date with upstream main." >> "$GITHUB_STEP_SUMMARY"
+          fi
