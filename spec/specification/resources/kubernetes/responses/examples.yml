@@ -126,11 +126,17 @@ kubernetes_clusters_all:
         enabled: false
       nvidia_gpu_device_plugin:
         enabled: false
+      nvidia_gpu_dra_driver:
+        enabled: false
+      amd_gpu_dra_driver:
+        enabled: false
       rdma_shared_dev_plugin:
         enabled: false
       coredns_autoscaler:
         enabled: false
       p2p_oci_registry_plugin:
+        enabled: false
+      nfs_csi_plugin:
         enabled: false
     meta:
       total: 1
@@ -263,11 +269,17 @@ kubernetes_single:
         enabled: false
       nvidia_gpu_device_plugin:
         enabled: false
+      nvidia_gpu_dra_driver:
+        enabled: false
+      amd_gpu_dra_driver:
+        enabled: false
       rdma_shared_dev_plugin:
         enabled: false
       coredns_autoscaler:
         enabled: false
       p2p_oci_registry_plugin:
+        enabled: false
+      nfs_csi_plugin:
         enabled: false
 
 kubernetes_updated:
@@ -397,11 +409,17 @@ kubernetes_updated:
         enabled: false
       nvidia_gpu_device_plugin:
         enabled: false
+      nvidia_gpu_dra_driver:
+        enabled: false
+      amd_gpu_dra_driver:
+        enabled: false
       rdma_shared_dev_plugin:
         enabled: false
       coredns_autoscaler:
         enabled: false
       p2p_oci_registry_plugin:
+        enabled: false
+      nfs_csi_plugin:
         enabled: false
 
 kubernetes_clusters_create_basic_response:
@@ -496,11 +514,17 @@ kubernetes_clusters_create_basic_response:
         enabled: false
       nvidia_gpu_device_plugin:
         enabled: false
+      nvidia_gpu_dra_driver:
+        enabled: false
+      amd_gpu_dra_driver:
+        enabled: false
       rdma_shared_dev_plugin:
         enabled: false
       coredns_autoscaler:
         enabled: false
       p2p_oci_registry_plugin:
+        enabled: false
+      nfs_csi_plugin:
         enabled: false
 
 kubernetes_clusters_multi_pool_response:

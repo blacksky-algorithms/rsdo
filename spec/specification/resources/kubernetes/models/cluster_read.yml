@@ -207,6 +207,12 @@ properties:
   nvidia_gpu_device_plugin:
     $ref: "nvidia_gpu_device_plugin.yml"
 
+  nvidia_gpu_dra_driver:
+    $ref: "nvidia_gpu_dra_driver.yml"
+
+  amd_gpu_dra_driver:
+    $ref: "amd_gpu_dra_driver.yml"
+
   rdma_shared_dev_plugin:
     $ref: "rdma_shared_dev_plugin.yml"
 
@@ -215,6 +221,9 @@ properties:
 
   p2p_oci_registry_plugin:
     $ref: "p2p_oci_registry_plugin.yml"
+
+  nfs_csi_plugin:
+    $ref: "nfs_csi_plugin.yml"
 
 required:
   - name
