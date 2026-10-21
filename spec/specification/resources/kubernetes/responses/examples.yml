@@ -126,6 +126,10 @@ kubernetes_clusters_all:
         enabled: false
       nvidia_gpu_device_plugin:
         enabled: false
+      nvidia_gpu_dra_driver:
+        enabled: false
+      amd_gpu_dra_driver:
+        enabled: false
       rdma_shared_dev_plugin:
         enabled: false
       coredns_autoscaler:
@@ -263,6 +267,10 @@ kubernetes_single:
         enabled: false
       nvidia_gpu_device_plugin:
         enabled: false
+      nvidia_gpu_dra_driver:
+        enabled: false
+      amd_gpu_dra_driver:
+        enabled: false
       rdma_shared_dev_plugin:
         enabled: false
       coredns_autoscaler:
@@ -397,6 +405,10 @@ kubernetes_updated:
         enabled: false
       nvidia_gpu_device_plugin:
         enabled: false
+      nvidia_gpu_dra_driver:
+        enabled: false
+      amd_gpu_dra_driver:
+        enabled: false
       rdma_shared_dev_plugin:
         enabled: false
       coredns_autoscaler:
@@ -495,6 +507,10 @@ kubernetes_clusters_create_basic_response:
       amd_gpu_device_metrics_exporter_plugin:
         enabled: false
       nvidia_gpu_device_plugin:
+        enabled: false
+      nvidia_gpu_dra_driver:
+        enabled: false
+      amd_gpu_dra_driver:
         enabled: false
       rdma_shared_dev_plugin:
         enabled: false
