@@ -192,8 +192,8 @@ fn fall_back_to_stub(output_path: &Path, stage: &str, error: &str) {
 /// DigitalOcean API surface. Additive upstream changes can break hand-written
 /// code under `examples/`, so a bump is a reviewable change, not a silent one.
 ///
-/// Pinned to `7c1300c4` (2026-08-07, "update disk_info enum members (#1212)").
-const OPENAPI_SPEC_REF: &str = "7c1300c479fed9c353cda9fc21cd968619552304";
+/// Pinned to `4d0324f8` (2026-09-07, "Fix list backups response description to use key backups (#1218)").
+const OPENAPI_SPEC_REF: &str = "4d0324f8f2def0ebbea9aab4796c9eef8935b730";
 
 /// Number of times to attempt the spec download before giving up.
 const DOWNLOAD_ATTEMPTS: u32 = 3;
